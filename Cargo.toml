@@ -1,0 +1,16 @@
+[package]
+name = "smallish"
+version = "0.1.0"
+edition = "2024"
+
+description = "Lightweight, no-std syntax for configuration and scripting."
+authors = ["Aaron Griffith <aargri@gmail.com>"]
+repository = "https://github.com/agrif/smallish"
+documentation = "https://docs.rs/smallish"
+readme = "README.md"
+license = "MIT"
+
+keywords = ["serde", "human-readable", "embedded"]
+categories = ["no-std", "no-std::no-alloc", "parser-implementations", "config"]
+
+[dependencies]
