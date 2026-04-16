@@ -13,4 +13,8 @@ license = "MIT"
 keywords = ["serde", "human-readable", "embedded"]
 categories = ["no-std", "no-std::no-alloc", "parser-implementations", "config"]
 
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
 [dependencies]
