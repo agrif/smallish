@@ -81,12 +81,14 @@ impl de::Error for Error {
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Deserializer<'de, const STACK: usize> {
     parser: Parser<'de, STACK>,
-    peeked: Option<Located<'de, Event<'de>>>,
+    peeked: Option<Event<'de>>,
+    location: Located<'de, ()>,
 }
 
 impl<'de, const STACK: usize> Deserializer<'de, STACK> {
     pub fn from_parser(parser: Parser<'de, STACK>) -> Self {
         Self {
+            location: parser.location().clone(),
             parser: parser,
             peeked: None,
         }
@@ -104,7 +106,7 @@ impl<'de, const STACK: usize> Deserializer<'de, STACK> {
         Self::from_parser(Parser::list_from_str(input))
     }
 
-    pub fn deserialize<T>(&mut self) -> Result<T, Error>
+    pub fn deserialize<T>(&mut self) -> Result<T, Located<'de, Error>>
     where
         T: de::Deserialize<'de>,
     {
@@ -112,38 +114,38 @@ impl<'de, const STACK: usize> Deserializer<'de, STACK> {
         self.finalize(result)
     }
 
-    fn finalize<T>(&self, result: Result<T, Error>) -> Result<T, Error> {
-        match result {
-            Ok(t) => {
-                if self.parser.is_eof() {
-                    Ok(t)
-                } else {
-                    Err(Error::UnusedInput)
-                }
-            }
-            Err(e) => Err(e),
+    fn finalize<T>(&self, mut result: Result<T, Error>) -> Result<T, Located<'de, Error>> {
+        if result.is_ok() && !self.parser.is_eof() {
+            result = Err(Error::UnusedInput);
         }
+
+        self.location.wrap(result).to_result().map(|r| r.value)
     }
 
     fn next(&mut self) -> Result<Event<'de>, Error> {
         if let Some(ev) = self.peeked.take() {
-            return Ok(ev.value);
+            return Ok(ev);
         }
 
-        Ok(Located::from_result(self.parser.next()).value?)
+        let next = self.parser.next();
+        let (loc, ev) = Located::from_result(next).split();
+        self.location = loc;
+
+        Ok(ev?)
     }
 
     fn peek(&mut self) -> Result<Event<'de>, Error> {
         if let Some(ev) = &self.peeked {
-            return Ok(ev.value.clone());
+            return Ok(ev.clone());
         }
 
-        let ev = match self.parser.next() {
-            Ok(ev) => ev,
-            Err(e) => Err(e.value)?,
-        };
+        let next = self.parser.next();
+        let (loc, ev) = Located::from_result(next).split();
+        self.location = loc;
+
+        let ev = ev?;
         self.peeked = Some(ev.clone());
-        Ok(ev.value)
+        Ok(ev)
     }
 
     fn next_with<T>(&mut self, f: impl FnOnce(&Event<'de>) -> Option<T>) -> Result<T, Error> {
@@ -151,9 +153,12 @@ impl<'de, const STACK: usize> Deserializer<'de, STACK> {
         f(&ev).ok_or(Error::InvalidType)
     }
 
-    fn peek_with<T>(&mut self, f: impl FnOnce(&Event<'de>) -> Option<T>) -> Result<T, Error> {
+    fn peek_with<T>(
+        &mut self,
+        f: impl FnOnce(&Event<'de>) -> Option<T>,
+    ) -> Result<Option<T>, Error> {
         let ev = self.peek()?;
-        f(&ev).ok_or(Error::InvalidType)
+        Ok(f(&ev))
     }
 
     fn consume(&mut self) {
@@ -161,21 +166,21 @@ impl<'de, const STACK: usize> Deserializer<'de, STACK> {
     }
 }
 
-pub fn from_str<'de, T>(input: &'de str) -> Result<T, Error>
+pub fn from_str<'de, T>(input: &'de str) -> Result<T, Located<'de, Error>>
 where
     T: de::Deserialize<'de>,
 {
     Deserializer::<64>::from_str(input).deserialize()
 }
 
-pub fn list_from_str<'de, T>(input: &'de str) -> Result<T, Error>
+pub fn list_from_str<'de, T>(input: &'de str) -> Result<T, Located<'de, Error>>
 where
     T: de::Deserialize<'de>,
 {
     Deserializer::<64>::list_from_str(input).deserialize()
 }
 
-pub fn map_from_str<'de, T>(input: &'de str) -> Result<T, Error>
+pub fn map_from_str<'de, T>(input: &'de str) -> Result<T, Located<'de, Error>>
 where
     T: de::Deserialize<'de>,
 {
@@ -340,8 +345,8 @@ impl<'de, const STACK: usize> de::Deserializer<'de> for &mut Deserializer<'de, S
         V: de::Visitor<'de>,
     {
         if self
-            .peek_with(|t| t.as_value().and_then(Value::as_null))
-            .is_ok()
+            .peek_with(|t| t.as_value().and_then(Value::as_null))?
+            .is_some()
         {
             self.consume();
             visitor.visit_none()
@@ -479,7 +484,7 @@ impl<'a, 'de, const STACK: usize> de::SeqAccess<'de> for Access<'a, 'de, STACK> 
     where
         T: de::DeserializeSeed<'de>,
     {
-        if self.de.peek_with(Event::as_list_close).is_ok() {
+        if self.de.peek_with(Event::as_list_close)?.is_some() {
             Ok(None)
         } else {
             seed.deserialize(&mut *self.de).map(Some)
@@ -542,7 +547,7 @@ impl<'a, 'de, const STACK: usize> de::MapAccess<'de> for Access<'a, 'de, STACK> 
     where
         K: de::DeserializeSeed<'de>,
     {
-        if let Ok(name) = self.de.peek_with(Event::as_key) {
+        if let Some(name) = self.de.peek_with(Event::as_key)? {
             self.de.consume();
             let de = de::value::BorrowedStrDeserializer::<'de, Error>::new(name);
             seed.deserialize(de).map(Some)
