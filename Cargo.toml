@@ -17,4 +17,8 @@ categories = ["no-std", "no-std::no-alloc", "parser-implementations", "config"]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 
+[features]
+default = []
+defmt = []
+
 [dependencies]
