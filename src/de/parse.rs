@@ -1,19 +1,6 @@
 use super::token::{self, Token, TokenKind, Tokenizer};
 use super::{LocResult, Located};
-use crate::types::Value;
-
-#[derive(Clone, Debug)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub enum Event<'de> {
-    ListOpen,
-    ListClose,
-    MapOpen,
-    MapClose,
-    EnumOpen(&'de str),
-    EnumClose,
-    Key(&'de str),
-    Value(Value),
-}
+use crate::types::Event;
 
 #[derive(Clone, Debug, thiserror::Error)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
