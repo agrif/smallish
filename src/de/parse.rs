@@ -1,5 +1,5 @@
 use super::token::{self, Token, TokenKind, Tokenizer};
-use super::Located;
+use super::{LocResult, Located};
 use crate::types::Value;
 
 #[derive(Clone, Debug)]
@@ -62,7 +62,7 @@ pub struct Parser<'de, const STACK: usize> {
     tokens: Tokenizer<'de>,
     initial_state: State,
     state: heapless::Vec<Located<'de, State>, STACK>,
-    unused_token: Option<Located<'de, Result<Token<'de>, token::Error>>>,
+    unused_token: Option<LocResult<'de, Token<'de>, token::Error>>,
     initial_state_sent: bool,
 }
 
@@ -211,7 +211,7 @@ impl<'de, const STACK: usize> Parser<'de, STACK> {
                     // but full enums are okay in maps
                     if matches!(self.state(), State::Enum) {
                         self.push(loc, State::FieldBareEnum)?;
-                        self.unused_token = Some(loc.clone().replace(Ok(tok)).0);
+                        self.unused_token = Some(Ok(loc.clone().replace(tok).0));
                     } else {
                         self.push(loc, State::Enum)?;
                     }
@@ -305,7 +305,7 @@ impl<'de, const STACK: usize> Parser<'de, STACK> {
                 | Token::ListClose
                 | Token::MapClose => {
                     self.pop()?;
-                    self.unused_token = Some(loc.clone().replace(Ok(tok)).0);
+                    self.unused_token = Some(Ok(loc.clone().replace(tok).0));
                     // FIXME emit EnumClose
                     Ok(Some(Event::EnumClose))
                 }
@@ -337,15 +337,15 @@ impl<'de, const STACK: usize> Parser<'de, STACK> {
         }
     }
 
-    pub fn next(&mut self) -> Located<'de, Result<Event<'de>, Error>> {
+    pub fn next(&mut self) -> LocResult<'de, Event<'de>, Error> {
         if !self.initial_state_sent {
             self.initial_state_sent = true;
             match self.initial_state {
                 State::ListItem | State::ListSep => {
-                    return self.tokens.location().wrap(Ok(Event::ListOpen));
+                    return Ok(self.location().wrap(Event::ListOpen));
                 }
                 State::MapItem | State::MapSep => {
-                    return self.tokens.location().wrap(Ok(Event::MapOpen));
+                    return Ok(self.location().wrap(Event::MapOpen));
                 }
                 _ => (),
             }
@@ -357,7 +357,7 @@ impl<'de, const STACK: usize> Parser<'de, STACK> {
             } else {
                 self.tokens.next()
             };
-            let (loc, tok) = tok.replace(());
+            let (loc, tok) = Located::from_result(tok).replace(());
             let tok = match tok {
                 Ok(tok) => tok,
                 Err(e) => match e.into() {
@@ -393,16 +393,16 @@ impl<'de, const STACK: usize> Parser<'de, STACK> {
                                 (loc.wrap(()), r)
                             }
                         };
-                        return loc.replace(val).0;
+                        return loc.replace(val).0.to_result();
                     }
-                    e => return loc.replace(Err(e)).0,
+                    e => return loc.replace(Err(e)).0.to_result(),
                 },
             };
 
             match self.step(&loc, tok) {
                 Ok(None) => continue,
-                Ok(Some(ev)) => return loc.replace(Ok(ev)).0,
-                Err(e) => return loc.replace(Err(e)).0,
+                Ok(Some(ev)) => return loc.replace(Ok(ev)).0.to_result(),
+                Err(e) => return loc.replace(Err(e)).0.to_result(),
             }
         }
     }

@@ -2,7 +2,7 @@ use nom::{
     branch, bytes, character::complete as character, combinator, multi, sequence, IResult, Parser,
 };
 
-use super::Located;
+use super::{LocResult, Located};
 use crate::types::{Integer, Value};
 
 #[derive(Clone, Debug)]
@@ -89,37 +89,39 @@ impl<'de> Tokenizer<'de> {
         self.input.is_empty()
     }
 
-    fn parse<P>(&mut self, mut parser: P) -> Located<'de, Result<P::Output, Error>>
+    fn parse<P>(&mut self, mut parser: P) -> LocResult<'de, P::Output, Error>
     where
         P: nom::Parser<&'de str, Error = nom::error::Error<&'de str>>,
     {
         if self.is_eof() {
-            return self.location.wrap(Err(Error::Eof));
+            return Err(self.location.wrap(Error::Eof));
         }
 
         match parser.parse(self.input) {
             Ok((input, v)) => {
-                let r = self.location.advance_and_wrap(self.input, input, Ok(v));
+                let r = self.location.advance_and_wrap(self.input, input, v);
                 self.input = input;
-                r
+                Ok(r)
             }
-            Err(nom::Err::Incomplete(_)) => self.location.wrap(Err(Error::UnknownToken)),
+            Err(nom::Err::Incomplete(_)) => Err(self.location.wrap(Error::UnknownToken)),
             Err(nom::Err::Error(e)) => {
-                self.location
-                    .advance_and_wrap(self.input, e.input, Err(Error::UnknownToken))
+                Err(self
+                    .location
+                    .advance_and_wrap(self.input, e.input, Error::UnknownToken))
             }
             Err(nom::Err::Failure(e)) => {
-                self.location
-                    .advance_and_wrap(self.input, e.input, Err(Error::UnknownToken))
+                Err(self
+                    .location
+                    .advance_and_wrap(self.input, e.input, Error::UnknownToken))
             }
         }
     }
 
-    pub fn next(&mut self) -> Located<'de, Result<Token<'de>, Error>> {
+    pub fn next(&mut self) -> LocResult<'de, Token<'de>, Error> {
         self.parse(Self::token)
     }
 
-    pub fn peek(&mut self) -> Located<'de, Result<Token<'de>, Error>> {
+    pub fn peek(&mut self) -> LocResult<'de, Token<'de>, Error> {
         self.parse(combinator::peek(Self::token))
     }
 

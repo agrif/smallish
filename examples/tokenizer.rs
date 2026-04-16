@@ -5,7 +5,7 @@ fn main() {
     let input = std::fs::read_to_string(&args[1]).unwrap();
     let mut tokenizer = token::Tokenizer::new(&input);
     loop {
-        let tok = tokenizer.next().transpose();
+        let tok = tokenizer.next();
         match tok {
             Ok(tok) => println!("{:?}", *tok),
             Err(e) => {

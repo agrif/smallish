@@ -1,3 +1,5 @@
+pub type LocResult<'de, T, E> = Result<Located<'de, T>, Located<'de, E>>;
+
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Located<'de, T> {
@@ -13,6 +15,29 @@ impl<'de> Located<'de, ()> {
         Located {
             source: Some(source),
             ..Default::default()
+        }
+    }
+}
+
+impl<'de, T, E> Located<'de, Result<T, E>> {
+    pub fn from_result(result: LocResult<'de, T, E>) -> Self {
+        match result {
+            Ok(t) => {
+                let (loc, t) = t.replace(());
+                loc.replace(Ok(t)).0
+            }
+            Err(e) => {
+                let (loc, e) = e.replace(());
+                loc.replace(Err(e)).0
+            }
+        }
+    }
+
+    pub fn to_result(self) -> LocResult<'de, T, E> {
+        let (loc, val) = self.replace(());
+        match val {
+            Ok(t) => Ok(loc.replace(t).0),
+            Err(e) => Err(loc.replace(e).0),
         }
     }
 }
@@ -93,16 +118,6 @@ impl<'de, T> Located<'de, T> {
             .map(|i| self.offset + i)
             .unwrap_or(source.len());
         Some(&source[start..end])
-    }
-}
-
-impl<'de, T, E> Located<'de, Result<T, E>> {
-    pub fn transpose(self) -> Result<Located<'de, T>, Located<'de, E>> {
-        let (loc, value) = self.replace(());
-        match value {
-            Ok(t) => Ok(loc.replace(t).0),
-            Err(e) => Err(loc.replace(e).0),
-        }
     }
 }
 
