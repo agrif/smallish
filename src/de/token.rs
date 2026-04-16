@@ -75,7 +75,7 @@ impl<'de> Tokenizer<'de> {
     pub fn new(input: &'de str) -> Self {
         let mut tokenizer = Self {
             input,
-            location: Located::from_source(input),
+            location: Located::new().with_source(input),
         };
         let _ = tokenizer.parse(Self::whitespace_and_newlines0);
         tokenizer

@@ -41,6 +41,12 @@ impl From<token::Error> for Error {
     }
 }
 
+impl<'de> From<Located<'de, token::Error>> for Located<'de, Error> {
+    fn from(other: Located<'de, token::Error>) -> Self {
+        other.map(Into::into)
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 enum State {
@@ -113,14 +119,14 @@ impl<'de, const STACK: usize> Parser<'de, STACK> {
 
     fn transition(&mut self, state: State) {
         if let Some(dest) = self.state.last_mut() {
-            *dest = dest.clone().replace(state).0;
+            *dest = dest.wrap(state);
         } else {
             self.initial_state = state;
         }
     }
 
     fn push(&mut self, loc: &Located<'de, ()>, state: State) -> Result<(), Error> {
-        if self.state.push(loc.clone().replace(state).0).is_err() {
+        if self.state.push(loc.wrap(state)).is_err() {
             Err(Error::MaxRecursion)
         } else {
             Ok(())
@@ -211,7 +217,7 @@ impl<'de, const STACK: usize> Parser<'de, STACK> {
                     // but full enums are okay in maps
                     if matches!(self.state(), State::Enum) {
                         self.push(loc, State::FieldBareEnum)?;
-                        self.unused_token = Some(Ok(loc.clone().replace(tok).0));
+                        self.unused_token = Some(Ok(loc.wrap(tok)));
                     } else {
                         self.push(loc, State::Enum)?;
                     }
@@ -305,8 +311,7 @@ impl<'de, const STACK: usize> Parser<'de, STACK> {
                 | Token::ListClose
                 | Token::MapClose => {
                     self.pop()?;
-                    self.unused_token = Some(Ok(loc.clone().replace(tok).0));
-                    // FIXME emit EnumClose
+                    self.unused_token = Some(Ok(loc.wrap(tok)));
                     Ok(Some(Event::EnumClose))
                 }
                 Token::ParenOpen => {
@@ -357,14 +362,14 @@ impl<'de, const STACK: usize> Parser<'de, STACK> {
             } else {
                 self.tokens.next()
             };
-            let (loc, tok) = Located::from_result(tok).replace(());
+            let (loc, tok) = Located::from_result(tok).split();
             let tok = match tok {
                 Ok(tok) => tok,
                 Err(e) => match e.into() {
                     Error::Eof => {
                         let (loc, val) = match self.state.last() {
                             Some(state) if matches!(**state, State::Enum) => {
-                                let state = state.wrap(());
+                                let state = state.pure();
                                 let _ = self.pop();
                                 (state, Ok(Event::EnumClose))
                             }
@@ -374,9 +379,9 @@ impl<'de, const STACK: usize> Parser<'de, STACK> {
                                     State::FieldEquals | State::FieldValue | State::FieldBareEnum
                                 ) =>
                             {
-                                (state.wrap(()), Err(Error::IncompleteField))
+                                (state.pure(), Err(Error::IncompleteField))
                             }
-                            Some(state) => (state.wrap(()), Err(Error::UnmatchedBraces)),
+                            Some(state) => (state.pure(), Err(Error::UnmatchedBraces)),
                             None => {
                                 let r = match self.initial_state {
                                     State::ListItem | State::ListSep => {
@@ -390,19 +395,19 @@ impl<'de, const STACK: usize> Parser<'de, STACK> {
                                     _ => Err(Error::Eof),
                                 };
 
-                                (loc.wrap(()), r)
+                                (loc.pure(), r)
                             }
                         };
-                        return loc.replace(val).0.to_result();
+                        return loc.replace(val).to_result();
                     }
-                    e => return loc.replace(Err(e)).0.to_result(),
+                    e => return loc.replace(Err(e)).to_result(),
                 },
             };
 
             match self.step(&loc, tok) {
                 Ok(None) => continue,
-                Ok(Some(ev)) => return loc.replace(Ok(ev)).0.to_result(),
-                Err(e) => return loc.replace(Err(e)).0.to_result(),
+                Ok(Some(ev)) => return loc.replace(Ok(ev)).to_result(),
+                Err(e) => return loc.replace(Err(e)).to_result(),
             }
         }
     }

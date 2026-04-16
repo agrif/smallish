@@ -2,48 +2,37 @@ pub type LocResult<'de, T, E> = Result<Located<'de, T>, Located<'de, E>>;
 
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[non_exhaustive]
 pub struct Located<'de, T> {
     pub source: Option<&'de str>,
     pub line: usize,
     pub column: usize,
-    offset: usize,
-    value: T,
+    pub offset: usize,
+    pub value: T,
 }
 
-impl<'de> Located<'de, ()> {
-    pub fn from_source(source: &'de str) -> Self {
-        Located {
-            source: Some(source),
-            ..Default::default()
-        }
-    }
-}
-
-impl<'de, T, E> Located<'de, Result<T, E>> {
-    pub fn from_result(result: LocResult<'de, T, E>) -> Self {
-        match result {
-            Ok(t) => {
-                let (loc, t) = t.replace(());
-                loc.replace(Ok(t)).0
-            }
-            Err(e) => {
-                let (loc, e) = e.replace(());
-                loc.replace(Err(e)).0
-            }
-        }
-    }
-
-    pub fn to_result(self) -> LocResult<'de, T, E> {
-        let (loc, val) = self.replace(());
-        match val {
-            Ok(t) => Ok(loc.replace(t).0),
-            Err(e) => Err(loc.replace(e).0),
-        }
+impl Located<'static, ()> {
+    pub fn new() -> Self {
+        Default::default()
     }
 }
 
 impl<'de, T> Located<'de, T> {
-    pub fn advance(&mut self, start: &'de str, end: &'de str) {
+    pub fn with_source<'a>(self, source: &'a str) -> Located<'a, T> {
+        Located {
+            source: Some(source),
+            ..self
+        }
+    }
+
+    pub fn without_source(self) -> Located<'static, T> {
+        Located {
+            source: None,
+            ..self
+        }
+    }
+
+    fn advance(&mut self, start: &'de str, end: &'de str) {
         if start.len() < end.len() {
             return;
         }
@@ -66,19 +55,6 @@ impl<'de, T> Located<'de, T> {
         self.offset += amt;
     }
 
-    pub fn replace<U>(self, value: U) -> (Located<'de, U>, T) {
-        (
-            Located {
-                source: self.source,
-                line: self.line,
-                column: self.column,
-                offset: self.offset,
-                value,
-            },
-            self.value,
-        )
-    }
-
     pub fn wrap<U>(&self, value: U) -> Located<'de, U> {
         Located {
             source: self.source,
@@ -89,7 +65,11 @@ impl<'de, T> Located<'de, T> {
         }
     }
 
-    pub fn advance_and_wrap<U>(
+    pub fn pure(&self) -> Located<'de, ()> {
+        self.wrap(())
+    }
+
+    pub(crate) fn advance_and_wrap<U>(
         &mut self,
         start: &'de str,
         end: &'de str,
@@ -100,11 +80,31 @@ impl<'de, T> Located<'de, T> {
         wrapped
     }
 
-    pub fn forget_source(self) -> Located<'static, T> {
+    pub fn map<U>(self, f: impl FnOnce(T) -> U) -> Located<'de, U> {
         Located {
-            source: None,
-            ..self
+            source: self.source,
+            line: self.line,
+            column: self.column,
+            offset: self.offset,
+            value: f(self.value),
         }
+    }
+
+    pub fn replace<U>(self, value: U) -> Located<'de, U> {
+        self.map(|_| value)
+    }
+
+    pub fn split(self) -> (Located<'de, ()>, T) {
+        (
+            Located {
+                source: self.source,
+                line: self.line,
+                column: self.column,
+                offset: self.offset,
+                value: (),
+            },
+            self.value,
+        )
     }
 
     pub fn get_source_line(&self) -> Option<&'de str> {
@@ -118,6 +118,23 @@ impl<'de, T> Located<'de, T> {
             .map(|i| self.offset + i)
             .unwrap_or(source.len());
         Some(&source[start..end])
+    }
+}
+
+impl<'de, T, E> Located<'de, Result<T, E>> {
+    pub fn from_result(result: LocResult<'de, T, E>) -> Self {
+        match result {
+            Ok(t) => t.map(Ok),
+            Err(e) => e.map(Err),
+        }
+    }
+
+    pub fn to_result(self) -> LocResult<'de, T, E> {
+        let (loc, val) = self.split();
+        match val {
+            Ok(t) => Ok(loc.replace(t)),
+            Err(e) => Err(loc.replace(e)),
+        }
     }
 }
 
