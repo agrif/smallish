@@ -22,3 +22,7 @@ default = []
 defmt = []
 
 [dependencies]
+defmt = "1"
+heapless = "0.8"
+nom = "8"
+thiserror = "2"
