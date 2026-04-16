@@ -12,3 +12,4 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo build --no-default-features --features "${{ matrix.features }}"
       - run: cargo test --no-default-features --features "${{ matrix.features }}"
+      - run: cargo build --examples --no-default-features --features "${{ matrix.features }}"
