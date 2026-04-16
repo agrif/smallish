@@ -1,9 +1,12 @@
 use smallish::de::parse;
 
+static SOURCE: &str = r#"
+some_enum a=bbb 25 4.0e2
+bar {baz = 2}
+"#;
+
 fn main() {
-    let args: Vec<String> = std::env::args().collect();
-    let input = std::fs::read_to_string(&args[1]).unwrap();
-    let mut parser = parse::Parser::<8>::list_from_str(&input);
+    let mut parser = parse::Parser::<8>::list_from_str(SOURCE);
     loop {
         let ev = parser.next();
         match ev {

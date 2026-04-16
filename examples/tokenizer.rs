@@ -1,9 +1,12 @@
 use smallish::de::token;
 
+static SOURCE: &str = r#"
+some_enum a=bbb 25 4.0e2
+bar {baz = 2}
+"#;
+
 fn main() {
-    let args: Vec<String> = std::env::args().collect();
-    let input = std::fs::read_to_string(&args[1]).unwrap();
-    let mut tokenizer = token::Tokenizer::new(&input);
+    let mut tokenizer = token::Tokenizer::new(SOURCE);
     loop {
         let tok = tokenizer.next();
         match tok {
