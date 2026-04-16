@@ -8,7 +8,7 @@ jobs:
       matrix:
         features: ["", "defmt"]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo build --no-default-features --features "${{ matrix.features }}"
       - run: cargo test --no-default-features --features "${{ matrix.features }}"
