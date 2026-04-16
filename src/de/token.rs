@@ -85,11 +85,15 @@ impl<'de> Tokenizer<'de> {
         &self.location
     }
 
+    pub fn is_eof(&self) -> bool {
+        self.input.is_empty()
+    }
+
     fn parse<P>(&mut self, mut parser: P) -> Located<'de, Result<P::Output, Error>>
     where
         P: nom::Parser<&'de str, Error = nom::error::Error<&'de str>>,
     {
-        if self.input.is_empty() {
+        if self.is_eof() {
             return self.location.wrap(Err(Error::Eof));
         }
 

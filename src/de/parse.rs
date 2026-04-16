@@ -91,6 +91,14 @@ impl<'de, const STACK: usize> Parser<'de, STACK> {
         }
     }
 
+    pub fn location(&self) -> &Located<'de, ()> {
+        self.tokens.location()
+    }
+
+    pub fn is_eof(&self) -> bool {
+        self.tokens.is_eof()
+    }
+
     fn state(&self) -> State {
         self.state.last().map(|s| **s).unwrap_or(self.initial_state)
     }
