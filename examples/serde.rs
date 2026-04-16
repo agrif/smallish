@@ -14,6 +14,7 @@ enum Instruction {
 #[derive(Clone, Debug, serde::Deserialize)]
 #[allow(unused)]
 struct Options {
+    #[serde(default)]
     foo: u8,
     bar: u8,
 }
@@ -35,6 +36,7 @@ Vec [0, 1, 2]
 Go dir=North
 Go dir=null
 SetOptions {foo=2, bar=8}
+SetOptions {bar=8}
 "#;
 
 fn main() {
