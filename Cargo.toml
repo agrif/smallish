@@ -19,10 +19,10 @@ rustdoc-args = ["--cfg", "docsrs"]
 
 [features]
 default = []
-defmt = []
+defmt = ["dep:defmt"]
 
 [dependencies]
-defmt = "1"
+defmt = { version = "1", optional = true }
 heapless = "0.8"
 nom = "8"
 thiserror = "2"

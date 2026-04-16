@@ -5,7 +5,8 @@ use nom::{
 use super::Located;
 use crate::types::{Integer, Value};
 
-#[derive(Clone, Debug, defmt::Format)]
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Token<'de> {
     Newline,
     Comma,
@@ -20,7 +21,8 @@ pub enum Token<'de> {
     Value(Value),
 }
 
-#[derive(Clone, PartialEq, Eq, Debug, defmt::Format)]
+#[derive(Clone, PartialEq, Eq, Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum TokenKind {
     Newline,
     Comma,
@@ -53,7 +55,8 @@ impl<'de> Token<'de> {
     }
 }
 
-#[derive(Clone, Debug, defmt::Format, thiserror::Error)]
+#[derive(Clone, Debug, thiserror::Error)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Error {
     #[error("end of file")]
     Eof,
@@ -61,7 +64,8 @@ pub enum Error {
     UnknownToken,
 }
 
-#[derive(Clone, Debug, defmt::Format)]
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Tokenizer<'de> {
     input: &'de str,
     location: Located<'de, ()>,

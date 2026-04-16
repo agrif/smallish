@@ -2,7 +2,8 @@ use super::token::{self, Token, TokenKind, Tokenizer};
 use super::Located;
 use crate::types::Value;
 
-#[derive(Clone, Debug, defmt::Format)]
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Event<'de> {
     ListOpen,
     ListClose,
@@ -14,7 +15,8 @@ pub enum Event<'de> {
     Value(Value),
 }
 
-#[derive(Clone, Debug, defmt::Format, thiserror::Error)]
+#[derive(Clone, Debug, thiserror::Error)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Error {
     #[error("end of file")]
     Eof,
@@ -39,7 +41,8 @@ impl From<token::Error> for Error {
     }
 }
 
-#[derive(Clone, Copy, Debug, defmt::Format)]
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 enum State {
     Value,
     ValueClose,
@@ -53,7 +56,8 @@ enum State {
     Enum,
 }
 
-#[derive(Clone, Debug, defmt::Format)]
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Parser<'de, const STACK: usize> {
     tokens: Tokenizer<'de>,
     initial_state: State,

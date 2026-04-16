@@ -1,4 +1,5 @@
-#[derive(Clone, Debug, defmt::Format)]
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Located<'de, T> {
     pub source: Option<&'de str>,
     pub line: usize,
