@@ -8,6 +8,8 @@ Lightweight, no-std syntax for configuration and scripting.
 
 ## License
 
-Licensed under the [MIT license](LICENSE). Unless stated otherwise,
+Licensed under the [MIT license][LICENSE]. Unless stated otherwise,
 any contributions to this work will also be licensed this way, with no
 additional terms or conditions.
+
+ [LICENSE]: ./LICENSE
