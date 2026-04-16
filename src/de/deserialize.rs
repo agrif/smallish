@@ -104,11 +104,24 @@ impl<'de, const STACK: usize> Deserializer<'de, STACK> {
         Self::from_parser(Parser::list_from_str(input))
     }
 
-    pub fn finalize(&self) -> Result<(), Error> {
-        if self.parser.is_eof() {
-            Ok(())
-        } else {
-            Err(Error::UnusedInput)
+    pub fn deserialize<T>(&mut self) -> Result<T, Error>
+    where
+        T: de::Deserialize<'de>,
+    {
+        let result = T::deserialize(&mut *self);
+        self.finalize(result)
+    }
+
+    fn finalize<T>(&self, result: Result<T, Error>) -> Result<T, Error> {
+        match result {
+            Ok(t) => {
+                if self.parser.is_eof() {
+                    Ok(t)
+                } else {
+                    Err(Error::UnusedInput)
+                }
+            }
+            Err(e) => Err(e),
         }
     }
 
@@ -152,30 +165,21 @@ pub fn from_str<'de, T>(input: &'de str) -> Result<T, Error>
 where
     T: de::Deserialize<'de>,
 {
-    let mut deserializer = Deserializer::<64>::from_str(input);
-    let t = T::deserialize(&mut deserializer)?;
-    deserializer.finalize()?;
-    Ok(t)
+    Deserializer::<64>::from_str(input).deserialize()
 }
 
 pub fn list_from_str<'de, T>(input: &'de str) -> Result<T, Error>
 where
     T: de::Deserialize<'de>,
 {
-    let mut deserializer = Deserializer::<64>::list_from_str(input);
-    let t = T::deserialize(&mut deserializer)?;
-    deserializer.finalize()?;
-    Ok(t)
+    Deserializer::<64>::list_from_str(input).deserialize()
 }
 
 pub fn map_from_str<'de, T>(input: &'de str) -> Result<T, Error>
 where
     T: de::Deserialize<'de>,
 {
-    let mut deserializer = Deserializer::<64>::list_from_str(input);
-    let t = T::deserialize(&mut deserializer)?;
-    deserializer.finalize()?;
-    Ok(t)
+    Deserializer::<64>::list_from_str(input).deserialize()
 }
 
 impl<'de, const STACK: usize> de::Deserializer<'de> for &mut Deserializer<'de, STACK> {
