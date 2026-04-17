@@ -3,6 +3,7 @@ use serde::de;
 
 use super::{Located, ParseError, Parser, ParserState};
 use crate::syntax::{Event, Integer, Value};
+use crate::Flavor;
 
 #[derive(Clone, Debug, thiserror::Error)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
@@ -94,25 +95,11 @@ impl<'de, 'state> Deserializer<'de, 'state> {
         }
     }
 
-    pub fn from_str<S>(input: &'de str, state: &'state mut S) -> Self
+    pub fn new<S>(flavor: Flavor, input: &'de str, state: &'state mut S) -> Self
     where
         S: AsMut<[ParserState]> + ?Sized,
     {
-        Self::from_parser(Parser::from_str(input, state))
-    }
-
-    pub fn list_from_str<S>(input: &'de str, state: &'state mut S) -> Self
-    where
-        S: AsMut<[ParserState]> + ?Sized,
-    {
-        Self::from_parser(Parser::list_from_str(input, state))
-    }
-
-    pub fn map_from_str<S>(input: &'de str, state: &'state mut S) -> Self
-    where
-        S: AsMut<[ParserState]> + ?Sized,
-    {
-        Self::from_parser(Parser::list_from_str(input, state))
+        Self::from_parser(Parser::new(flavor, input, state))
     }
 
     pub fn deserialize<T>(&mut self) -> Result<T, Located<'de, Error>>

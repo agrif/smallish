@@ -38,7 +38,7 @@ SetOptions {bar=8}
 "#;
 
 fn main() {
-    match smallish::list_from_str::<Vec<Instruction>>(SOURCE) {
+    match smallish::from_str::<Vec<Instruction>>(smallish::Flavor::List, SOURCE) {
         Ok(instructions) => println!("{:#?}", instructions),
         Err(e) => println!("error: {}", e),
     }

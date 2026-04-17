@@ -1,5 +1,6 @@
 use super::{LocResult, Located, TokenError, Tokenizer};
 use crate::syntax::{Event, Token, TokenKind};
+use crate::Flavor;
 
 #[derive(Clone, Debug, thiserror::Error)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
@@ -89,13 +90,19 @@ pub struct Parser<'de, 'state> {
 }
 
 impl<'de, 'state> Parser<'de, 'state> {
-    pub fn from_str<S>(input: &'de str, state: &'state mut S) -> Self
+    pub fn new<S>(flavor: Flavor, input: &'de str, state: &'state mut S) -> Self
     where
         S: AsMut<[ParserState]> + ?Sized,
     {
+        let initial_state = match flavor {
+            Flavor::Value => State::Value,
+            Flavor::List => State::ListItem,
+            Flavor::Map => State::MapItem,
+        };
+
         Self {
             tokens: Tokenizer::new(input),
-            initial_state: State::Value,
+            initial_state,
             // safety: ParserState is repr(transparent), this only changes
             // a 'static into 'de. We are careful to never read anything
             // but that which we ourselves write to, and 'de outlives self.
@@ -103,26 +110,6 @@ impl<'de, 'state> Parser<'de, 'state> {
             state_top: 0,
             unused_token: None,
             initial_state_sent: false,
-        }
-    }
-
-    pub fn list_from_str<S>(input: &'de str, state: &'state mut S) -> Self
-    where
-        S: AsMut<[ParserState]> + ?Sized,
-    {
-        Self {
-            initial_state: State::ListItem,
-            ..Self::from_str(input, state)
-        }
-    }
-
-    pub fn map_from_str<S>(input: &'de str, state: &'state mut S) -> Self
-    where
-        S: AsMut<[ParserState]> + ?Sized,
-    {
-        Self {
-            initial_state: State::MapItem,
-            ..Self::from_str(input, state)
         }
     }
 
