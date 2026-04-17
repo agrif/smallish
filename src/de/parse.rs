@@ -34,31 +34,39 @@ impl<'de> From<Located<'de, TokenError>> for Located<'de, ParseError> {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-// safety: transparent is important, see constructors for Parser
-#[repr(transparent)]
-pub struct ParserState {
-    // use 'static here, this is transmuted to 'de inside Parser
-    // we just want it to be possible to use static buffers for this
-    state: Located<'static, State>,
-}
+// put this in a dedicated module so there is no accidentally using
+// the private fields.
+mod parser_state {
+    #[derive(Clone, Copy, Debug, Default)]
+    #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+    // safety: transparent is important, see constructors for Parser
+    #[repr(transparent)]
+    pub struct ParserState {
+        // safety: This is private to be inaccessible outside this module,
+        // since this *will* contain lifetimes shorter than 'static in reality.
+        // Use 'static here, this is transmuted to 'de inside Parser.
+        // We just want it to be possible to use static buffers for this.
+        state: super::Located<'static, super::State>,
+    }
 
-impl ParserState {
-    pub const fn new() -> Self {
-        Self {
-            // use all zeros so this can be placed in bss if needed
-            // the location is never used without being initialized
-            state: Located {
-                source: None,
-                line: 0,
-                column: 0,
-                offset: 0,
-                value: State::Value,
-            },
+    impl ParserState {
+        pub const fn new() -> Self {
+            Self {
+                // Use all zeros so this can be placed in bss if needed.
+                // This is never used without being initialized first.
+                state: super::Located {
+                    source: None,
+                    line: 0,
+                    column: 0,
+                    offset: 0,
+                    value: super::State::Value,
+                },
+            }
         }
     }
 }
+
+pub use parser_state::ParserState;
 
 #[derive(Clone, Copy, Debug, Default)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
