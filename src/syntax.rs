@@ -15,17 +15,18 @@ define_enum_with_kind! {
         MapOpen,
         MapClose,
         Ident(&'de str),
-        Value(Value),
+        Value(Value<'de>),
     }
 }
 
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub enum Value {
+pub enum Value<'de> {
     Null,
     Bool(bool),
     Integer(Integer),
     Float(Float),
+    String(&'de str),
 }
 
 #[derive(Clone, Debug)]
@@ -38,5 +39,5 @@ pub enum Event<'de> {
     EnumOpen(&'de str),
     EnumClose,
     Key(&'de str),
-    Value(Value),
+    Value(Value<'de>),
 }

@@ -9,6 +9,8 @@ pub enum ParseError {
     Eof,
     #[error("unknown token")]
     UnknownToken,
+    #[error("unknown escape sequence")]
+    UnknownEscape,
     #[error("unexpected {0:?}, expected one of {1:?}")]
     UnexpectedToken(TokenKind, &'static [TokenKind]),
     #[error("maximum recursion limit exceeded")]
@@ -24,6 +26,7 @@ impl From<TokenError> for ParseError {
         match err {
             TokenError::Eof => Self::Eof,
             TokenError::UnknownToken => Self::UnknownToken,
+            TokenError::UnknownEscape => Self::UnknownEscape,
         }
     }
 }

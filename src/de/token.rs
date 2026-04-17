@@ -1,5 +1,5 @@
 use nom::{
-    branch, bytes, character::complete as character, combinator, multi, sequence, IResult, Parser,
+    branch, bytes, character::complete as character, combinator, error, multi, sequence, Parser,
 };
 
 use super::{LocResult, Located};
@@ -12,7 +12,47 @@ pub enum TokenError {
     Eof,
     #[error("unknown token")]
     UnknownToken,
+    #[error("unknown escape sequence")]
+    UnknownEscape,
 }
+
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+struct NomError<I> {
+    input: I,
+    error: TokenError,
+}
+
+impl<I> NomError<I> {
+    fn replace(self, error: TokenError) -> Self {
+        Self { error, ..self }
+    }
+}
+
+impl<I> error::ParseError<I> for NomError<I> {
+    fn from_error_kind(input: I, kind: error::ErrorKind) -> Self {
+        Self {
+            input,
+            error: match kind {
+                error::ErrorKind::Eof => TokenError::Eof,
+                _ => TokenError::UnknownToken,
+            },
+        }
+    }
+
+    fn append(_input: I, _kind: error::ErrorKind, other: Self) -> Self {
+        other
+    }
+}
+
+impl<I, E> error::FromExternalError<I, E> for NomError<I> {
+    fn from_external_error(input: I, kind: error::ErrorKind, _err: E) -> Self {
+        use error::ParseError;
+        Self::from_error_kind(input, kind)
+    }
+}
+
+type IResult<I, O> = nom::IResult<I, O, NomError<I>>;
 
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
@@ -41,7 +81,7 @@ impl<'de> Tokenizer<'de> {
 
     fn parse<P>(&mut self, mut parser: P) -> LocResult<'de, P::Output, TokenError>
     where
-        P: nom::Parser<&'de str, Error = nom::error::Error<&'de str>>,
+        P: nom::Parser<&'de str, Error = NomError<&'de str>>,
     {
         if self.is_eof() {
             return Err(self.location.wrap(TokenError::Eof));
@@ -49,20 +89,22 @@ impl<'de> Tokenizer<'de> {
 
         match parser.parse(self.input) {
             Ok((input, v)) => {
-                let r = self.location.advance_and_wrap(self.input, input, v);
+                let r = self.location.wrap(v);
+                self.location.advance(self.input, input);
                 self.input = input;
                 Ok(r)
             }
             Err(nom::Err::Incomplete(_)) => Err(self.location.wrap(TokenError::UnknownToken)),
             Err(nom::Err::Error(e)) => {
-                Err(self
-                    .location
-                    .advance_and_wrap(self.input, e.input, TokenError::UnknownToken))
+                // errors are recoverable and should point to token start
+                let r = self.location.wrap(e.error);
+                self.location.advance(self.input, e.input);
+                Err(r)
             }
             Err(nom::Err::Failure(e)) => {
-                Err(self
-                    .location
-                    .advance_and_wrap(self.input, e.input, TokenError::UnknownToken))
+                // failures are specific to exactly where they failed
+                self.location.advance(self.input, e.input);
+                Err(self.location.wrap(e.error))
             }
         }
     }
@@ -204,6 +246,46 @@ impl<'de> Tokenizer<'de> {
             .parse(input)
     }
 
+    fn string_plain<'a>(input: &'a str) -> IResult<&'a str, ()> {
+        combinator::verify(bytes::is_not("\"\\"), |s: &str| !s.is_empty())
+            .map(|_| ())
+            .parse(input)
+    }
+
+    fn string_escape<'a>(input: &'a str) -> IResult<&'a str, ()> {
+        branch::alt((
+            character::char('n').map(|_| '\n'),
+            character::char('r').map(|_| '\r'),
+            character::char('t').map(|_| '\t'),
+            character::char('\\').map(|_| '\\'),
+            character::char('0').map(|_| '\0'),
+            character::char('"').map(|_| '"'),
+            character::char('\'').map(|_| '\''),
+            // todo: \xNN, \u{NNNN}
+        ))
+        .map(|_| ())
+        .parse(input)
+        .map_err(|e| e.map(|e: NomError<_>| e.replace(TokenError::UnknownEscape)))
+    }
+
+    fn string_chunk<'a>(input: &'a str) -> IResult<&'a str, ()> {
+        branch::alt((
+            Self::string_plain,
+            sequence::preceded(character::char('\\'), combinator::cut(Self::string_escape)),
+        ))
+        .parse(input)
+    }
+
+    fn string<'a>(input: &'a str) -> IResult<&'a str, Token<'a>> {
+        sequence::delimited(
+            character::char('"'),
+            combinator::recognize(multi::many0_count(Self::string_chunk)),
+            character::char('"'),
+        )
+        .map(|s| Token::Value(Value::String(s)))
+        .parse(input)
+    }
+
     fn token<'a>(input: &'a str) -> IResult<&'a str, Token<'a>> {
         branch::alt((
             sequence::terminated(Self::newline, Self::whitespace0),
@@ -211,6 +293,7 @@ impl<'de> Tokenizer<'de> {
             sequence::terminated(Self::symbol, Self::whitespace0),
             sequence::terminated(Self::integer, Self::whitespace0),
             sequence::terminated(Self::float, Self::whitespace0),
+            sequence::terminated(Self::string, Self::whitespace0),
             sequence::terminated(Self::ident, Self::whitespace0).map(|id| match id {
                 "null" => Token::Value(Value::Null),
                 "true" => Token::Value(Value::Bool(true)),

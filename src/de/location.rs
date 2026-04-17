@@ -38,7 +38,7 @@ impl<'de, T> Located<'de, T> {
         }
     }
 
-    fn advance(&mut self, start: &'de str, end: &'de str) {
+    pub(crate) fn advance(&mut self, start: &'de str, end: &'de str) {
         if start.len() < end.len() {
             return;
         }
@@ -73,17 +73,6 @@ impl<'de, T> Located<'de, T> {
 
     pub fn pure(&self) -> Located<'de, ()> {
         self.wrap(())
-    }
-
-    pub(crate) fn advance_and_wrap<U>(
-        &mut self,
-        start: &'de str,
-        end: &'de str,
-        value: U,
-    ) -> Located<'de, U> {
-        let wrapped = self.wrap(value);
-        self.advance(start, end);
-        wrapped
     }
 
     pub fn map<U>(self, f: impl FnOnce(T) -> U) -> Located<'de, U> {
