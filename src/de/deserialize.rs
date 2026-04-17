@@ -1,3 +1,4 @@
+use as_variant::as_variant;
 use serde::de;
 
 use super::{Located, ParseError, Parser};
@@ -179,7 +180,9 @@ impl<'de, const STACK: usize> de::Deserializer<'de> for &mut Deserializer<'de, S
     where
         V: de::Visitor<'de>,
     {
-        let v = self.next_with(|t| Value::as_bool(t.as_value()?).copied())?;
+        let v = self.next_with(|t| {
+            as_variant!(t, Event::Value).and_then(as_variant!(Value::Bool(v) => *v))
+        })?;
         visitor.visit_bool(v)
     }
 
@@ -187,7 +190,9 @@ impl<'de, const STACK: usize> de::Deserializer<'de> for &mut Deserializer<'de, S
     where
         V: de::Visitor<'de>,
     {
-        let v = self.next_with(|t| Value::as_integer(t.as_value()?).copied())?;
+        let v = self.next_with(|t| {
+            as_variant!(t, Event::Value).and_then(as_variant!(Value::Integer(v) => *v))
+        })?;
         let v = v.try_into().map_err(|_| Error::OutOfRange(v))?;
         visitor.visit_i8(v)
     }
@@ -196,7 +201,9 @@ impl<'de, const STACK: usize> de::Deserializer<'de> for &mut Deserializer<'de, S
     where
         V: de::Visitor<'de>,
     {
-        let v = self.next_with(|t| Value::as_integer(t.as_value()?).copied())?;
+        let v = self.next_with(|t| {
+            as_variant!(t, Event::Value).and_then(as_variant!(Value::Integer(v) => *v))
+        })?;
         let v = v.try_into().map_err(|_| Error::OutOfRange(v))?;
         visitor.visit_u8(v)
     }
@@ -205,7 +212,9 @@ impl<'de, const STACK: usize> de::Deserializer<'de> for &mut Deserializer<'de, S
     where
         V: de::Visitor<'de>,
     {
-        let v = self.next_with(|t| Value::as_integer(t.as_value()?).copied())?;
+        let v = self.next_with(|t| {
+            as_variant!(t, Event::Value).and_then(as_variant!(Value::Integer(v) => *v))
+        })?;
         let v = v.try_into().map_err(|_| Error::OutOfRange(v))?;
         visitor.visit_i16(v)
     }
@@ -214,7 +223,9 @@ impl<'de, const STACK: usize> de::Deserializer<'de> for &mut Deserializer<'de, S
     where
         V: de::Visitor<'de>,
     {
-        let v = self.next_with(|t| Value::as_integer(t.as_value()?).copied())?;
+        let v = self.next_with(|t| {
+            as_variant!(t, Event::Value).and_then(as_variant!(Value::Integer(v) => *v))
+        })?;
         let v = v.try_into().map_err(|_| Error::OutOfRange(v))?;
         visitor.visit_u16(v)
     }
@@ -223,7 +234,9 @@ impl<'de, const STACK: usize> de::Deserializer<'de> for &mut Deserializer<'de, S
     where
         V: de::Visitor<'de>,
     {
-        let v = self.next_with(|t| Value::as_integer(t.as_value()?).copied())?;
+        let v = self.next_with(|t| {
+            as_variant!(t, Event::Value).and_then(as_variant!(Value::Integer(v) => *v))
+        })?;
         let v = v.try_into().map_err(|_| Error::OutOfRange(v))?;
         visitor.visit_i32(v)
     }
@@ -232,7 +245,9 @@ impl<'de, const STACK: usize> de::Deserializer<'de> for &mut Deserializer<'de, S
     where
         V: de::Visitor<'de>,
     {
-        let v = self.next_with(|t| Value::as_integer(t.as_value()?).copied())?;
+        let v = self.next_with(|t| {
+            as_variant!(t, Event::Value).and_then(as_variant!(Value::Integer(v) => *v))
+        })?;
         let v = v.try_into().map_err(|_| Error::OutOfRange(v))?;
         visitor.visit_u32(v)
     }
@@ -241,7 +256,9 @@ impl<'de, const STACK: usize> de::Deserializer<'de> for &mut Deserializer<'de, S
     where
         V: de::Visitor<'de>,
     {
-        let v = self.next_with(|t| Value::as_integer(t.as_value()?).copied())?;
+        let v = self.next_with(|t| {
+            as_variant!(t, Event::Value).and_then(as_variant!(Value::Integer(v) => *v))
+        })?;
         visitor.visit_i64(v)
     }
 
@@ -249,7 +266,9 @@ impl<'de, const STACK: usize> de::Deserializer<'de> for &mut Deserializer<'de, S
     where
         V: de::Visitor<'de>,
     {
-        let v = self.next_with(|t| Value::as_integer(t.as_value()?).copied())?;
+        let v = self.next_with(|t| {
+            as_variant!(t, Event::Value).and_then(as_variant!(Value::Integer(v) => *v))
+        })?;
         let v = v.try_into().map_err(|_| Error::OutOfRange(v))?;
         visitor.visit_u64(v)
     }
@@ -272,7 +291,9 @@ impl<'de, const STACK: usize> de::Deserializer<'de> for &mut Deserializer<'de, S
     where
         V: de::Visitor<'de>,
     {
-        let v = self.next_with(|t| Value::as_float(t.as_value()?).copied())?;
+        let v = self.next_with(|t| {
+            as_variant!(t, Event::Value).and_then(as_variant!(Value::Float(v) => *v))
+        })?;
         visitor.visit_f32(v)
     }
 
@@ -323,7 +344,7 @@ impl<'de, const STACK: usize> de::Deserializer<'de> for &mut Deserializer<'de, S
         V: de::Visitor<'de>,
     {
         if self
-            .peek_with(|t| t.as_value().and_then(Value::as_null))?
+            .peek_with(|t| as_variant!(t, Event::Value).and_then(as_variant!(Value::Null => ())))?
             .is_some()
         {
             self.consume();
@@ -337,7 +358,7 @@ impl<'de, const STACK: usize> de::Deserializer<'de> for &mut Deserializer<'de, S
     where
         V: de::Visitor<'de>,
     {
-        self.next_with(|t| t.as_value().and_then(Value::as_null))?;
+        self.next_with(|t| as_variant!(t, Event::Value).and_then(as_variant!(Value::Null => ())))?;
         visitor.visit_unit()
     }
 
@@ -367,9 +388,9 @@ impl<'de, const STACK: usize> de::Deserializer<'de> for &mut Deserializer<'de, S
     where
         V: de::Visitor<'de>,
     {
-        self.next_with(Event::as_list_open)?;
+        self.next_with(as_variant!(Event::ListOpen => ()))?;
         let v = visitor.visit_seq(Access::new(self))?;
-        self.next_with(Event::as_list_close)?;
+        self.next_with(as_variant!(Event::ListClose => ()))?;
         Ok(v)
     }
 
@@ -396,9 +417,9 @@ impl<'de, const STACK: usize> de::Deserializer<'de> for &mut Deserializer<'de, S
     where
         V: de::Visitor<'de>,
     {
-        self.next_with(Event::as_map_open)?;
+        self.next_with(as_variant!(Event::MapOpen => ()))?;
         let v = visitor.visit_map(Access::new(self))?;
-        self.next_with(Event::as_map_close)?;
+        self.next_with(as_variant!(Event::MapClose => ()))?;
         Ok(v)
     }
 
@@ -424,7 +445,7 @@ impl<'de, const STACK: usize> de::Deserializer<'de> for &mut Deserializer<'de, S
         V: de::Visitor<'de>,
     {
         let v = visitor.visit_enum(Access::new(self))?;
-        self.next_with(Event::as_enum_close)?;
+        self.next_with(as_variant!(Event::EnumClose => ()))?;
         Ok(v)
     }
 
@@ -462,7 +483,11 @@ impl<'a, 'de, const STACK: usize> de::SeqAccess<'de> for Access<'a, 'de, STACK> 
     where
         T: de::DeserializeSeed<'de>,
     {
-        if self.de.peek_with(Event::as_list_close)?.is_some() {
+        if self
+            .de
+            .peek_with(as_variant!(Event::ListClose => ()))?
+            .is_some()
+        {
             Ok(None)
         } else {
             seed.deserialize(&mut *self.de).map(Some)
@@ -478,7 +503,7 @@ impl<'a, 'de, const STACK: usize> de::EnumAccess<'de> for Access<'a, 'de, STACK>
     where
         T: de::DeserializeSeed<'de>,
     {
-        let name = self.de.next_with(Event::as_enum_open)?;
+        let name = self.de.next_with(as_variant!(Event::EnumOpen(n) => *n))?;
         let de = de::value::BorrowedStrDeserializer::<'de, Error>::new(name);
         let val = seed.deserialize(de)?;
         Ok((val, self))
@@ -525,7 +550,7 @@ impl<'a, 'de, const STACK: usize> de::MapAccess<'de> for Access<'a, 'de, STACK> 
     where
         K: de::DeserializeSeed<'de>,
     {
-        if let Some(name) = self.de.peek_with(Event::as_key)? {
+        if let Some(name) = self.de.peek_with(as_variant!(Event::Key(n) => *n))? {
             self.de.consume();
             let de = de::value::BorrowedStrDeserializer::<'de, Error>::new(name);
             seed.deserialize(de).map(Some)

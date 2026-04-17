@@ -22,6 +22,7 @@ default = []
 defmt = ["dep:defmt"]
 
 [dependencies]
+as_variant = "1"
 defmt = { version = "1", optional = true }
 heapless = "0.9"
 nom = "8"
