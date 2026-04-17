@@ -1,5 +1,5 @@
-use super::{LocResult, Located, Token, TokenError, TokenKind, Tokenizer};
-use crate::types::Event;
+use super::{LocResult, Located, TokenError, Tokenizer};
+use crate::syntax::{Event, Token, TokenKind};
 
 #[derive(Clone, Debug, thiserror::Error)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]

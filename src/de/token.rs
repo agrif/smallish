@@ -3,57 +3,7 @@ use nom::{
 };
 
 use super::{LocResult, Located};
-use crate::types::{Integer, Value};
-
-#[derive(Clone, Debug)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub enum Token<'de> {
-    Newline,
-    Comma,
-    Equals,
-    ParenOpen,
-    ParenClose,
-    ListOpen,
-    ListClose,
-    MapOpen,
-    MapClose,
-    Ident(&'de str),
-    Value(Value),
-}
-
-#[derive(Clone, PartialEq, Eq, Debug)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub enum TokenKind {
-    Newline,
-    Comma,
-    Equals,
-    ParenOpen,
-    ParenClose,
-    ListOpen,
-    ListClose,
-    MapOpen,
-    MapClose,
-    Ident,
-    Value,
-}
-
-impl<'de> Token<'de> {
-    pub fn kind(&self) -> TokenKind {
-        match self {
-            Self::Newline => TokenKind::Newline,
-            Self::Comma => TokenKind::Comma,
-            Self::Equals => TokenKind::Equals,
-            Self::ParenOpen => TokenKind::ParenOpen,
-            Self::ParenClose => TokenKind::ParenClose,
-            Self::ListOpen => TokenKind::ListOpen,
-            Self::ListClose => TokenKind::ListClose,
-            Self::MapOpen => TokenKind::MapOpen,
-            Self::MapClose => TokenKind::MapClose,
-            Self::Ident(_) => TokenKind::Ident,
-            Self::Value(_) => TokenKind::Value,
-        }
-    }
-}
+use crate::syntax::{Integer, Token, Value};
 
 #[derive(Clone, Debug, thiserror::Error)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]

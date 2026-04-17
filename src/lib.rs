@@ -5,7 +5,7 @@
 #![doc = include_str!("../README.md")]
 
 pub mod de;
-pub mod types;
+pub mod syntax;
 
 pub fn from_str<'de, T>(input: &'de str) -> Result<T, de::Located<'de, de::Error>>
 where

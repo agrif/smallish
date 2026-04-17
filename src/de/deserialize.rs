@@ -1,7 +1,7 @@
 use serde::de;
 
 use super::{Located, ParseError, Parser};
-use crate::types::{Event, Integer, Value};
+use crate::syntax::{Event, Integer, Value};
 
 #[derive(Debug, Clone, thiserror::Error)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
