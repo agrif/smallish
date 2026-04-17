@@ -37,39 +37,28 @@ impl<'de> From<Located<'de, TokenError>> for Located<'de, ParseError> {
     }
 }
 
-// put this in a dedicated module so there is no accidentally using
-// the private fields.
-mod parser_state {
-    // safety: don't derive anything that can peek inside besides Copy
-    #[derive(Clone, Copy, Default)]
-    // safety: transparent is important, see constructors for Parser
-    #[repr(transparent)]
-    pub struct ParserState {
-        // safety: This is private to be inaccessible outside this module,
-        // since this *will* contain lifetimes shorter than 'static in reality.
-        // Use 'static here, this is transmuted to 'de inside Parser.
-        // We just want it to be possible to use static buffers for this.
-        state: super::Located<'static, super::State>,
-    }
+#[derive(Clone, Copy, Debug, Default)]
+pub struct ParserState {
+    // eat the complication that static brings here, so that users can
+    // allocate this buffer statically
+    state: Located<'static, State>,
+}
 
-    impl ParserState {
-        pub const fn new() -> Self {
-            Self {
-                // Use all zeros so this can be placed in bss if needed.
-                // This is never used without being initialized first.
-                state: super::Located {
-                    source: None,
-                    line: 0,
-                    column: 0,
-                    offset: 0,
-                    value: super::State::Value,
-                },
-            }
+impl ParserState {
+    pub const fn new() -> Self {
+        Self {
+            // Use all zeros so this can be placed in bss if needed.
+            // This is never used without being initialized first.
+            state: Located {
+                source: None,
+                line: 0,
+                column: 0,
+                offset: 0,
+                value: State::Value,
+            },
         }
     }
 }
-
-pub use parser_state::ParserState;
 
 #[derive(Clone, Copy, Debug, Default)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
@@ -93,20 +82,10 @@ enum State {
 pub struct Parser<'de, 'state> {
     tokens: Tokenizer<'de>,
     initial_state: State,
-    // safety: must have same repr as ParserState
-    state: &'state mut [Located<'de, State>],
+    state: &'state mut [ParserState],
     state_top: usize,
     unused_token: Option<LocResult<'de, Token<'de>, TokenError>>,
     initial_state_sent: bool,
-}
-
-impl<'de, 'state> Drop for Parser<'de, 'state> {
-    fn drop(&mut self) {
-        // safety: drop all dangling pointers, just in case
-        for state in self.state.iter_mut() {
-            state.source = None;
-        }
-    }
 }
 
 impl<'de, 'state> Parser<'de, 'state> {
@@ -123,10 +102,7 @@ impl<'de, 'state> Parser<'de, 'state> {
         Self {
             tokens: Tokenizer::new(input),
             initial_state,
-            // safety: ParserState is repr(transparent), this only changes
-            // a 'static into 'de. We are careful to never read anything
-            // but that which we ourselves write to, and 'de outlives self.
-            state: unsafe { core::mem::transmute(state.as_mut()) },
+            state: state.as_mut(),
             state_top: 0,
             unused_token: None,
             initial_state_sent: false,
@@ -149,11 +125,18 @@ impl<'de, 'state> Parser<'de, 'state> {
         Err(ParseError::UnexpectedToken(t.kind(), expected))
     }
 
+    fn located_state(&self) -> Option<Located<'de, State>> {
+        self.state_top
+            .checked_sub(1)
+            .and_then(|i| self.state.get(i))
+            .map(|s| s.state.with_source(self.location().source))
+    }
+
     fn state(&self) -> State {
         self.state_top
             .checked_sub(1)
             .and_then(|i| self.state.get(i))
-            .map(|s| **s)
+            .map(|s| *s.state)
             .unwrap_or(self.initial_state)
     }
 
@@ -163,7 +146,7 @@ impl<'de, 'state> Parser<'de, 'state> {
             .checked_sub(1)
             .and_then(|i| self.state.get_mut(i))
         {
-            *dest = dest.wrap(state);
+            dest.state = dest.state.wrap(state);
         } else {
             self.initial_state = state;
         }
@@ -171,7 +154,7 @@ impl<'de, 'state> Parser<'de, 'state> {
 
     fn push(&mut self, loc: &Located<'de, ()>, state: State) -> Result<(), ParseError> {
         if self.state_top < self.state.len() {
-            self.state[self.state_top] = loc.wrap(state);
+            self.state[self.state_top].state = loc.wrap(state).without_source();
             self.state_top += 1;
             Ok(())
         } else {
@@ -414,19 +397,15 @@ impl<'de, 'state> Parser<'de, 'state> {
                 Ok(tok) => tok,
                 Err(e) => match e.into() {
                     ParseError::Eof => {
-                        let (loc, val) = match self
-                            .state_top
-                            .checked_sub(1)
-                            .and_then(|i| self.state.get(i))
-                        {
-                            Some(state) if matches!(**state, State::Enum) => {
+                        let (loc, val) = match self.located_state() {
+                            Some(state) if matches!(*state, State::Enum) => {
                                 let state = state.pure();
                                 let _ = self.pop();
                                 (state, Ok(Event::EnumClose))
                             }
                             Some(state)
                                 if matches!(
-                                    **state,
+                                    *state,
                                     State::FieldEquals | State::FieldValue | State::FieldBareEnum
                                 ) =>
                             {

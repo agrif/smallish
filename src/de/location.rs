@@ -24,11 +24,8 @@ impl Located<'static, ()> {
 }
 
 impl<'de, T> Located<'de, T> {
-    pub fn with_source<'a>(self, source: &'a str) -> Located<'a, T> {
-        Located {
-            source: Some(source),
-            ..self
-        }
+    pub fn with_source<'a>(self, source: Option<&'a str>) -> Located<'a, T> {
+        Located { source, ..self }
     }
 
     pub fn without_source(self) -> Located<'static, T> {
