@@ -4,6 +4,9 @@
 //! [LICENSE]: https://github.com/agrif/smallish/blob/main/LICENSE
 #![doc = include_str!("../README.md")]
 
+#[macro_use]
+mod macros;
+
 pub mod de;
 pub mod syntax;
 

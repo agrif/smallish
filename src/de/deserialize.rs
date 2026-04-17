@@ -179,7 +179,7 @@ impl<'de, const STACK: usize> de::Deserializer<'de> for &mut Deserializer<'de, S
     where
         V: de::Visitor<'de>,
     {
-        let v = self.next_with(|t| t.as_value().and_then(Value::as_bool))?;
+        let v = self.next_with(|t| Value::as_bool(t.as_value()?).copied())?;
         visitor.visit_bool(v)
     }
 
@@ -187,7 +187,7 @@ impl<'de, const STACK: usize> de::Deserializer<'de> for &mut Deserializer<'de, S
     where
         V: de::Visitor<'de>,
     {
-        let v = self.next_with(|t| t.as_value().and_then(Value::as_integer))?;
+        let v = self.next_with(|t| Value::as_integer(t.as_value()?).copied())?;
         let v = v.try_into().map_err(|_| Error::OutOfRange(v))?;
         visitor.visit_i8(v)
     }
@@ -196,7 +196,7 @@ impl<'de, const STACK: usize> de::Deserializer<'de> for &mut Deserializer<'de, S
     where
         V: de::Visitor<'de>,
     {
-        let v = self.next_with(|t| t.as_value().and_then(Value::as_integer))?;
+        let v = self.next_with(|t| Value::as_integer(t.as_value()?).copied())?;
         let v = v.try_into().map_err(|_| Error::OutOfRange(v))?;
         visitor.visit_u8(v)
     }
@@ -205,7 +205,7 @@ impl<'de, const STACK: usize> de::Deserializer<'de> for &mut Deserializer<'de, S
     where
         V: de::Visitor<'de>,
     {
-        let v = self.next_with(|t| t.as_value().and_then(Value::as_integer))?;
+        let v = self.next_with(|t| Value::as_integer(t.as_value()?).copied())?;
         let v = v.try_into().map_err(|_| Error::OutOfRange(v))?;
         visitor.visit_i16(v)
     }
@@ -214,7 +214,7 @@ impl<'de, const STACK: usize> de::Deserializer<'de> for &mut Deserializer<'de, S
     where
         V: de::Visitor<'de>,
     {
-        let v = self.next_with(|t| t.as_value().and_then(Value::as_integer))?;
+        let v = self.next_with(|t| Value::as_integer(t.as_value()?).copied())?;
         let v = v.try_into().map_err(|_| Error::OutOfRange(v))?;
         visitor.visit_u16(v)
     }
@@ -223,7 +223,7 @@ impl<'de, const STACK: usize> de::Deserializer<'de> for &mut Deserializer<'de, S
     where
         V: de::Visitor<'de>,
     {
-        let v = self.next_with(|t| t.as_value().and_then(Value::as_integer))?;
+        let v = self.next_with(|t| Value::as_integer(t.as_value()?).copied())?;
         let v = v.try_into().map_err(|_| Error::OutOfRange(v))?;
         visitor.visit_i32(v)
     }
@@ -232,7 +232,7 @@ impl<'de, const STACK: usize> de::Deserializer<'de> for &mut Deserializer<'de, S
     where
         V: de::Visitor<'de>,
     {
-        let v = self.next_with(|t| t.as_value().and_then(Value::as_integer))?;
+        let v = self.next_with(|t| Value::as_integer(t.as_value()?).copied())?;
         let v = v.try_into().map_err(|_| Error::OutOfRange(v))?;
         visitor.visit_u32(v)
     }
@@ -241,7 +241,7 @@ impl<'de, const STACK: usize> de::Deserializer<'de> for &mut Deserializer<'de, S
     where
         V: de::Visitor<'de>,
     {
-        let v = self.next_with(|t| t.as_value().and_then(Value::as_integer))?;
+        let v = self.next_with(|t| Value::as_integer(t.as_value()?).copied())?;
         visitor.visit_i64(v)
     }
 
@@ -249,7 +249,7 @@ impl<'de, const STACK: usize> de::Deserializer<'de> for &mut Deserializer<'de, S
     where
         V: de::Visitor<'de>,
     {
-        let v = self.next_with(|t| t.as_value().and_then(Value::as_integer))?;
+        let v = self.next_with(|t| Value::as_integer(t.as_value()?).copied())?;
         let v = v.try_into().map_err(|_| Error::OutOfRange(v))?;
         visitor.visit_u64(v)
     }
@@ -272,7 +272,7 @@ impl<'de, const STACK: usize> de::Deserializer<'de> for &mut Deserializer<'de, S
     where
         V: de::Visitor<'de>,
     {
-        let v = self.next_with(|t| t.as_value().and_then(Value::as_float))?;
+        let v = self.next_with(|t| Value::as_float(t.as_value()?).copied())?;
         visitor.visit_f32(v)
     }
 
