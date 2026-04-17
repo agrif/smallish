@@ -97,6 +97,15 @@ pub struct Parser<'de, 'state> {
     initial_state_sent: bool,
 }
 
+impl<'de, 'state> Drop for Parser<'de, 'state> {
+    fn drop(&mut self) {
+        // safety: drop all dangling pointers, just in case
+        for state in self.state.iter_mut() {
+            state.source = None;
+        }
+    }
+}
+
 impl<'de, 'state> Parser<'de, 'state> {
     pub fn new<S>(flavor: Flavor, input: &'de str, state: &'state mut S) -> Self
     where
