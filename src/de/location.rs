@@ -107,7 +107,7 @@ impl<'de, T> Located<'de, T> {
         )
     }
 
-    pub fn get_source_line(&self) -> Option<&'de str> {
+    pub fn source_line(&self) -> Option<&'de str> {
         let source = self.source?;
         let start = source[..self.offset]
             .rfind('\n')
@@ -177,7 +177,7 @@ where
             "{} at source location {}:{}",
             self.value, self.line, self.column
         )?;
-        if let Some(line) = self.get_source_line() {
+        if let Some(line) = self.source_line() {
             writeln!(f, "  | {}", line)?;
             writeln!(f, "    {}^", " ".repeat(self.column))?;
         }
