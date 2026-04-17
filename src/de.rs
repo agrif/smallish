@@ -5,5 +5,5 @@ mod token;
 
 pub use deserialize::{Deserializer, Error};
 pub use location::{LocResult, Located};
-pub use parse::{ParseError, Parser};
+pub use parse::{ParseError, Parser, ParserState};
 pub use token::{TokenError, Tokenizer};

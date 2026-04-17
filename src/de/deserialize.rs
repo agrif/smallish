@@ -1,10 +1,10 @@
 use as_variant::as_variant;
 use serde::de;
 
-use super::{Located, ParseError, Parser};
+use super::{Located, ParseError, Parser, ParserState};
 use crate::syntax::{Event, Integer, Value};
 
-#[derive(Debug, Clone, thiserror::Error)]
+#[derive(Clone, Debug, thiserror::Error)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Error {
     #[error("parse error: {0}")]
@@ -77,16 +77,16 @@ impl de::Error for Error {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct Deserializer<'de, const STACK: usize> {
-    parser: Parser<'de, STACK>,
+pub struct Deserializer<'de, 'state> {
+    parser: Parser<'de, 'state>,
     peeked: Option<Event<'de>>,
     location: Located<'de, ()>,
 }
 
-impl<'de, const STACK: usize> Deserializer<'de, STACK> {
-    pub fn from_parser(parser: Parser<'de, STACK>) -> Self {
+impl<'de, 'state> Deserializer<'de, 'state> {
+    pub fn from_parser(parser: Parser<'de, 'state>) -> Self {
         Self {
             location: parser.location().clone(),
             parser: parser,
@@ -94,16 +94,25 @@ impl<'de, const STACK: usize> Deserializer<'de, STACK> {
         }
     }
 
-    pub fn from_str(input: &'de str) -> Self {
-        Self::from_parser(Parser::from_str(input))
+    pub fn from_str<S>(input: &'de str, state: &'state mut S) -> Self
+    where
+        S: AsMut<[ParserState]> + ?Sized,
+    {
+        Self::from_parser(Parser::from_str(input, state))
     }
 
-    pub fn list_from_str(input: &'de str) -> Self {
-        Self::from_parser(Parser::list_from_str(input))
+    pub fn list_from_str<S>(input: &'de str, state: &'state mut S) -> Self
+    where
+        S: AsMut<[ParserState]> + ?Sized,
+    {
+        Self::from_parser(Parser::list_from_str(input, state))
     }
 
-    pub fn map_from_str(input: &'de str) -> Self {
-        Self::from_parser(Parser::list_from_str(input))
+    pub fn map_from_str<S>(input: &'de str, state: &'state mut S) -> Self
+    where
+        S: AsMut<[ParserState]> + ?Sized,
+    {
+        Self::from_parser(Parser::list_from_str(input, state))
     }
 
     pub fn deserialize<T>(&mut self) -> Result<T, Located<'de, Error>>
@@ -166,7 +175,7 @@ impl<'de, const STACK: usize> Deserializer<'de, STACK> {
     }
 }
 
-impl<'de, const STACK: usize> de::Deserializer<'de> for &mut Deserializer<'de, STACK> {
+impl<'de, 'state> de::Deserializer<'de> for &mut Deserializer<'de, 'state> {
     type Error = Error;
 
     fn deserialize_any<V>(self, _visitor: V) -> Result<V::Value, Self::Error>
@@ -466,17 +475,17 @@ impl<'de, const STACK: usize> de::Deserializer<'de> for &mut Deserializer<'de, S
 
 #[derive(Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-struct Access<'a, 'de: 'a, const STACK: usize> {
-    de: &'a mut Deserializer<'de, STACK>,
+struct Access<'a, 'de: 'a, 'state> {
+    de: &'a mut Deserializer<'de, 'state>,
 }
 
-impl<'a, 'de, const STACK: usize> Access<'a, 'de, STACK> {
-    fn new(de: &'a mut Deserializer<'de, STACK>) -> Self {
+impl<'a, 'de, 'state> Access<'a, 'de, 'state> {
+    fn new(de: &'a mut Deserializer<'de, 'state>) -> Self {
         Self { de }
     }
 }
 
-impl<'a, 'de, const STACK: usize> de::SeqAccess<'de> for Access<'a, 'de, STACK> {
+impl<'a, 'de, 'state> de::SeqAccess<'de> for Access<'a, 'de, 'state> {
     type Error = Error;
 
     fn next_element_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>, Self::Error>
@@ -495,7 +504,7 @@ impl<'a, 'de, const STACK: usize> de::SeqAccess<'de> for Access<'a, 'de, STACK> 
     }
 }
 
-impl<'a, 'de, const STACK: usize> de::EnumAccess<'de> for Access<'a, 'de, STACK> {
+impl<'a, 'de, 'state> de::EnumAccess<'de> for Access<'a, 'de, 'state> {
     type Error = Error;
     type Variant = Self;
 
@@ -510,7 +519,7 @@ impl<'a, 'de, const STACK: usize> de::EnumAccess<'de> for Access<'a, 'de, STACK>
     }
 }
 
-impl<'a, 'de, const STACK: usize> de::VariantAccess<'de> for Access<'a, 'de, STACK> {
+impl<'a, 'de, 'state> de::VariantAccess<'de> for Access<'a, 'de, 'state> {
     type Error = Error;
 
     fn unit_variant(self) -> Result<(), Self::Error> {
@@ -543,7 +552,7 @@ impl<'a, 'de, const STACK: usize> de::VariantAccess<'de> for Access<'a, 'de, STA
     }
 }
 
-impl<'a, 'de, const STACK: usize> de::MapAccess<'de> for Access<'a, 'de, STACK> {
+impl<'a, 'de, 'state> de::MapAccess<'de> for Access<'a, 'de, 'state> {
     type Error = Error;
 
     fn next_key_seed<K>(&mut self, seed: K) -> Result<Option<K::Value>, Self::Error>

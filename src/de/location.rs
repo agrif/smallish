@@ -1,6 +1,6 @@
 pub type LocResult<'de, T, E> = Result<Located<'de, T>, Located<'de, E>>;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[non_exhaustive]
 pub struct Located<'de, T> {
@@ -12,8 +12,14 @@ pub struct Located<'de, T> {
 }
 
 impl Located<'static, ()> {
-    pub fn new() -> Self {
-        Default::default()
+    pub const fn new() -> Self {
+        Self {
+            source: None,
+            line: 1,
+            column: 0,
+            offset: 0,
+            value: (),
+        }
     }
 }
 

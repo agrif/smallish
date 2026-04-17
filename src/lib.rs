@@ -14,19 +14,22 @@ pub fn from_str<'de, T>(input: &'de str) -> Result<T, de::Located<'de, de::Error
 where
     T: serde::de::Deserialize<'de>,
 {
-    de::Deserializer::<64>::from_str(input).deserialize()
+    let mut state = [Default::default(); 64];
+    de::Deserializer::from_str(input, &mut state).deserialize()
 }
 
 pub fn list_from_str<'de, T>(input: &'de str) -> Result<T, de::Located<'de, de::Error>>
 where
     T: serde::de::Deserialize<'de>,
 {
-    de::Deserializer::<64>::list_from_str(input).deserialize()
+    let mut state = [Default::default(); 64];
+    de::Deserializer::list_from_str(input, &mut state).deserialize()
 }
 
 pub fn map_from_str<'de, T>(input: &'de str) -> Result<T, de::Located<'de, de::Error>>
 where
     T: serde::de::Deserialize<'de>,
 {
-    de::Deserializer::<64>::list_from_str(input).deserialize()
+    let mut state = [Default::default(); 64];
+    de::Deserializer::map_from_str(input, &mut state).deserialize()
 }

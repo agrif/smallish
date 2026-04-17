@@ -6,7 +6,8 @@ bar {baz = 2}
 "#;
 
 fn main() {
-    let mut parser = de::Parser::<8>::list_from_str(SOURCE);
+    let mut state = [de::ParserState::default(); 8];
+    let mut parser = de::Parser::list_from_str(SOURCE, &mut state);
     loop {
         let ev = parser.next();
         match ev {
