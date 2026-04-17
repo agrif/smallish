@@ -1,14 +1,13 @@
 use serde::de;
 
-use super::parse::{self, Parser};
-use super::Located;
+use super::{Located, ParseError, Parser};
 use crate::types::{Event, Integer, Value};
 
 #[derive(Debug, Clone, thiserror::Error)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Error {
     #[error("parse error: {0}")]
-    Parse(#[from] parse::Error),
+    Parse(#[from] ParseError),
     #[error("unused input at end")]
     UnusedInput,
     #[error("not implemented: {0}")]
@@ -34,8 +33,8 @@ pub enum Error {
     DuplicateField(&'static str),
 }
 
-impl<'de> From<Located<'de, parse::Error>> for Located<'de, Error> {
-    fn from(other: Located<'de, parse::Error>) -> Self {
+impl<'de> From<Located<'de, ParseError>> for Located<'de, Error> {
+    fn from(other: Located<'de, ParseError>) -> Self {
         other.map(Into::into)
     }
 }
@@ -164,27 +163,6 @@ impl<'de, const STACK: usize> Deserializer<'de, STACK> {
     fn consume(&mut self) {
         self.peeked = None;
     }
-}
-
-pub fn from_str<'de, T>(input: &'de str) -> Result<T, Located<'de, Error>>
-where
-    T: de::Deserialize<'de>,
-{
-    Deserializer::<64>::from_str(input).deserialize()
-}
-
-pub fn list_from_str<'de, T>(input: &'de str) -> Result<T, Located<'de, Error>>
-where
-    T: de::Deserialize<'de>,
-{
-    Deserializer::<64>::list_from_str(input).deserialize()
-}
-
-pub fn map_from_str<'de, T>(input: &'de str) -> Result<T, Located<'de, Error>>
-where
-    T: de::Deserialize<'de>,
-{
-    Deserializer::<64>::list_from_str(input).deserialize()
 }
 
 impl<'de, const STACK: usize> de::Deserializer<'de> for &mut Deserializer<'de, STACK> {

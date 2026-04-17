@@ -6,3 +6,24 @@
 
 pub mod de;
 pub mod types;
+
+pub fn from_str<'de, T>(input: &'de str) -> Result<T, de::Located<'de, de::Error>>
+where
+    T: serde::de::Deserialize<'de>,
+{
+    de::Deserializer::<64>::from_str(input).deserialize()
+}
+
+pub fn list_from_str<'de, T>(input: &'de str) -> Result<T, de::Located<'de, de::Error>>
+where
+    T: serde::de::Deserialize<'de>,
+{
+    de::Deserializer::<64>::list_from_str(input).deserialize()
+}
+
+pub fn map_from_str<'de, T>(input: &'de str) -> Result<T, de::Located<'de, de::Error>>
+where
+    T: serde::de::Deserialize<'de>,
+{
+    de::Deserializer::<64>::list_from_str(input).deserialize()
+}

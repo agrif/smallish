@@ -1,7 +1,9 @@
 mod deserialize;
 mod location;
-pub mod parse;
-pub mod token;
+mod parse;
+mod token;
 
-pub use deserialize::{from_str, list_from_str, map_from_str, Deserializer, Error};
+pub use deserialize::{Deserializer, Error};
 pub use location::{LocResult, Located};
+pub use parse::{ParseError, Parser};
+pub use token::{Token, TokenError, TokenKind, Tokenizer};

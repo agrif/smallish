@@ -1,10 +1,9 @@
-use super::token::{self, Token, TokenKind, Tokenizer};
-use super::{LocResult, Located};
+use super::{LocResult, Located, Token, TokenError, TokenKind, Tokenizer};
 use crate::types::Event;
 
 #[derive(Clone, Debug, thiserror::Error)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub enum Error {
+pub enum ParseError {
     #[error("end of file")]
     Eof,
     #[error("unknown token")]
@@ -19,17 +18,17 @@ pub enum Error {
     IncompleteField,
 }
 
-impl From<token::Error> for Error {
-    fn from(err: token::Error) -> Self {
+impl From<TokenError> for ParseError {
+    fn from(err: TokenError) -> Self {
         match err {
-            token::Error::Eof => Self::Eof,
-            token::Error::UnknownToken => Self::UnknownToken,
+            TokenError::Eof => Self::Eof,
+            TokenError::UnknownToken => Self::UnknownToken,
         }
     }
 }
 
-impl<'de> From<Located<'de, token::Error>> for Located<'de, Error> {
-    fn from(other: Located<'de, token::Error>) -> Self {
+impl<'de> From<Located<'de, TokenError>> for Located<'de, ParseError> {
+    fn from(other: Located<'de, TokenError>) -> Self {
         other.map(Into::into)
     }
 }
@@ -55,7 +54,7 @@ pub struct Parser<'de, const STACK: usize> {
     tokens: Tokenizer<'de>,
     initial_state: State,
     state: heapless::Vec<Located<'de, State>, STACK>,
-    unused_token: Option<LocResult<'de, Token<'de>, token::Error>>,
+    unused_token: Option<LocResult<'de, Token<'de>, TokenError>>,
     initial_state_sent: bool,
 }
 
@@ -100,8 +99,8 @@ impl<'de, const STACK: usize> Parser<'de, STACK> {
         &self,
         t: Token<'de>,
         expected: &'static [TokenKind],
-    ) -> Result<Option<Event<'de>>, Error> {
-        Err(Error::UnexpectedToken(t.kind(), expected))
+    ) -> Result<Option<Event<'de>>, ParseError> {
+        Err(ParseError::UnexpectedToken(t.kind(), expected))
     }
 
     fn transition(&mut self, state: State) {
@@ -112,17 +111,17 @@ impl<'de, const STACK: usize> Parser<'de, STACK> {
         }
     }
 
-    fn push(&mut self, loc: &Located<'de, ()>, state: State) -> Result<(), Error> {
+    fn push(&mut self, loc: &Located<'de, ()>, state: State) -> Result<(), ParseError> {
         if self.state.push(loc.wrap(state)).is_err() {
-            Err(Error::MaxRecursion)
+            Err(ParseError::MaxRecursion)
         } else {
             Ok(())
         }
     }
 
-    fn pop(&mut self) -> Result<(), Error> {
+    fn pop(&mut self) -> Result<(), ParseError> {
         if self.state.pop().is_none() {
-            Err(Error::UnmatchedBraces)
+            Err(ParseError::UnmatchedBraces)
         } else {
             Ok(())
         }
@@ -132,7 +131,7 @@ impl<'de, const STACK: usize> Parser<'de, STACK> {
         &mut self,
         loc: &Located<'de, ()>,
         tok: Token<'de>,
-    ) -> Result<Option<Event<'de>>, Error> {
+    ) -> Result<Option<Event<'de>>, ParseError> {
         use TokenKind::*;
 
         match self.state() {
@@ -329,7 +328,7 @@ impl<'de, const STACK: usize> Parser<'de, STACK> {
         }
     }
 
-    pub fn next(&mut self) -> LocResult<'de, Event<'de>, Error> {
+    pub fn next(&mut self) -> LocResult<'de, Event<'de>, ParseError> {
         if !self.initial_state_sent {
             self.initial_state_sent = true;
             match self.initial_state {
@@ -353,7 +352,7 @@ impl<'de, const STACK: usize> Parser<'de, STACK> {
             let tok = match tok {
                 Ok(tok) => tok,
                 Err(e) => match e.into() {
-                    Error::Eof => {
+                    ParseError::Eof => {
                         let (loc, val) = match self.state.last() {
                             Some(state) if matches!(**state, State::Enum) => {
                                 let state = state.pure();
@@ -366,9 +365,9 @@ impl<'de, const STACK: usize> Parser<'de, STACK> {
                                     State::FieldEquals | State::FieldValue | State::FieldBareEnum
                                 ) =>
                             {
-                                (state.pure(), Err(Error::IncompleteField))
+                                (state.pure(), Err(ParseError::IncompleteField))
                             }
-                            Some(state) => (state.pure(), Err(Error::UnmatchedBraces)),
+                            Some(state) => (state.pure(), Err(ParseError::UnmatchedBraces)),
                             None => {
                                 let r = match self.initial_state {
                                     State::ListItem | State::ListSep => {
@@ -379,7 +378,7 @@ impl<'de, const STACK: usize> Parser<'de, STACK> {
                                         self.initial_state = State::Value;
                                         Ok(Event::MapClose)
                                     }
-                                    _ => Err(Error::Eof),
+                                    _ => Err(ParseError::Eof),
                                 };
 
                                 (loc.pure(), r)

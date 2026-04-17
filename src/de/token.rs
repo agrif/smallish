@@ -57,7 +57,7 @@ impl<'de> Token<'de> {
 
 #[derive(Clone, Debug, thiserror::Error)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub enum Error {
+pub enum TokenError {
     #[error("end of file")]
     Eof,
     #[error("unknown token")]
@@ -89,12 +89,12 @@ impl<'de> Tokenizer<'de> {
         self.input.is_empty()
     }
 
-    fn parse<P>(&mut self, mut parser: P) -> LocResult<'de, P::Output, Error>
+    fn parse<P>(&mut self, mut parser: P) -> LocResult<'de, P::Output, TokenError>
     where
         P: nom::Parser<&'de str, Error = nom::error::Error<&'de str>>,
     {
         if self.is_eof() {
-            return Err(self.location.wrap(Error::Eof));
+            return Err(self.location.wrap(TokenError::Eof));
         }
 
         match parser.parse(self.input) {
@@ -103,25 +103,25 @@ impl<'de> Tokenizer<'de> {
                 self.input = input;
                 Ok(r)
             }
-            Err(nom::Err::Incomplete(_)) => Err(self.location.wrap(Error::UnknownToken)),
+            Err(nom::Err::Incomplete(_)) => Err(self.location.wrap(TokenError::UnknownToken)),
             Err(nom::Err::Error(e)) => {
                 Err(self
                     .location
-                    .advance_and_wrap(self.input, e.input, Error::UnknownToken))
+                    .advance_and_wrap(self.input, e.input, TokenError::UnknownToken))
             }
             Err(nom::Err::Failure(e)) => {
                 Err(self
                     .location
-                    .advance_and_wrap(self.input, e.input, Error::UnknownToken))
+                    .advance_and_wrap(self.input, e.input, TokenError::UnknownToken))
             }
         }
     }
 
-    pub fn next(&mut self) -> LocResult<'de, Token<'de>, Error> {
+    pub fn next(&mut self) -> LocResult<'de, Token<'de>, TokenError> {
         self.parse(Self::token)
     }
 
-    pub fn peek(&mut self) -> LocResult<'de, Token<'de>, Error> {
+    pub fn peek(&mut self) -> LocResult<'de, Token<'de>, TokenError> {
         self.parse(combinator::peek(Self::token))
     }
 

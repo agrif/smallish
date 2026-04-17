@@ -1,5 +1,3 @@
-use smallish::de;
-
 #[derive(Clone, Debug, serde::Deserialize)]
 #[allow(unused)]
 enum Instruction {
@@ -40,7 +38,7 @@ SetOptions {bar=8}
 "#;
 
 fn main() {
-    match de::list_from_str::<Vec<Instruction>>(SOURCE) {
+    match smallish::list_from_str::<Vec<Instruction>>(SOURCE) {
         Ok(instructions) => println!("{:#?}", instructions),
         Err(e) => println!("error: {}", e),
     }
