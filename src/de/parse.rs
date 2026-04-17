@@ -37,8 +37,8 @@ impl<'de> From<Located<'de, TokenError>> for Located<'de, ParseError> {
 // put this in a dedicated module so there is no accidentally using
 // the private fields.
 mod parser_state {
-    #[derive(Clone, Copy, Debug, Default)]
-    #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+    // safety: don't derive anything that can peek inside besides Copy
+    #[derive(Clone, Copy, Default)]
     // safety: transparent is important, see constructors for Parser
     #[repr(transparent)]
     pub struct ParserState {
