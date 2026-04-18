@@ -485,11 +485,42 @@ impl<'de, 'state> de::Deserializer<'de> for &mut Deserializer<'de, 'state> {
         Err(Error::NotImplemented("identifier"))
     }
 
-    fn deserialize_ignored_any<V>(self, _visitor: V) -> Result<V::Value, Self::Error>
+    fn deserialize_ignored_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: de::Visitor<'de>,
     {
-        Err(Error::NotImplemented("ignored_any"))
+        // simple: check nesting depth, do not distinguish type
+        // (assume the parser is emitting well-formed events)
+        let mut depth: usize = 0;
+        loop {
+            match self.next()? {
+                // nesting events
+                Event::ListOpen | Event::MapOpen | Event::EnumOpen(_) => {
+                    depth += 1;
+                }
+                // un-nesting, value producing events
+                Event::ListClose | Event::MapClose | Event::EnumClose => {
+                    depth = depth.saturating_sub(1);
+                    if depth == 0 {
+                        break;
+                    }
+                }
+                // value event (no nesting)
+                Event::Value(_) => {
+                    if depth == 0 {
+                        break;
+                    }
+                }
+                // keys should not occur unless nested
+                Event::Key(_) => {
+                    if depth == 0 {
+                        return Err(Error::InvalidType);
+                    }
+                }
+            }
+        }
+
+        visitor.visit_unit()
     }
 }
 
