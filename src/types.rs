@@ -1,3 +1,3 @@
 mod str;
 
-pub use str::EscapedStr;
+pub use str::{EscapedStr, UnescapeError};

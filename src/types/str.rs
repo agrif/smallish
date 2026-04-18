@@ -2,11 +2,20 @@ use core::borrow::Borrow;
 
 use nom::{combinator, multi, Parser};
 
-use crate::de::{TokenError, Tokenizer};
+use crate::de::{token::StringChunk, TokenError, Tokenizer};
 
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct EscapedStr<T>(T);
+
+#[derive(Clone, Debug, thiserror::Error)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub enum UnescapeError {
+    #[error("{0}")]
+    BadString(#[from] TokenError),
+    #[error("buffer full")]
+    BufferFull,
+}
 
 impl<T> EscapedStr<T>
 where
@@ -26,6 +35,53 @@ where
             Err(nom::Err::Incomplete(_)) => Err(TokenError::UnknownToken),
             Err(nom::Err::Error(e) | nom::Err::Failure(e)) => Err(e.error),
         }
+    }
+
+    pub fn unescape<'a>(
+        &self,
+        buffer: &'a mut [u8],
+    ) -> Result<(&'a mut [u8], &'a str), UnescapeError> {
+        let mut input = self.0.borrow();
+        let mut i = 0;
+        while !input.is_empty() {
+            match Tokenizer::string_chunk(input) {
+                Ok((rest, chunk)) => {
+                    assert!(rest.len() < input.len());
+                    input = rest;
+                    match chunk {
+                        StringChunk::Str(s) => {
+                            let bytes = s.as_bytes();
+                            let amt = bytes.len();
+                            buffer
+                                .get_mut(i..i + amt)
+                                .ok_or(UnescapeError::BufferFull)?
+                                .copy_from_slice(bytes);
+                            i += amt;
+                        }
+                        StringChunk::Char(c) => {
+                            let amt = c.len_utf8();
+                            c.encode_utf8(
+                                buffer
+                                    .get_mut(i..i + amt)
+                                    .ok_or(UnescapeError::BufferFull)?,
+                            );
+                            i += amt;
+                        }
+                    }
+                }
+                // can only be caused by a bad use of new_unchecked
+                Err(nom::Err::Incomplete(_)) => Err(TokenError::UnknownToken)?,
+                Err(nom::Err::Error(e) | nom::Err::Failure(e)) => Err(e.error)?,
+            }
+        }
+
+        let (result, unused) = buffer.split_at_mut(i);
+
+        // safety: we just produced this directly from valid utf-8 &str
+        // and raw characters
+        let result = unsafe { core::str::from_utf8_unchecked(result) };
+
+        Ok((unused, result))
     }
 }
 

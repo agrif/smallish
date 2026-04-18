@@ -58,6 +58,13 @@ type IResult<I, O> = nom::IResult<I, O, NomError<I>>;
 
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub(crate) enum StringChunk<'de> {
+    Str(&'de str),
+    Char(char),
+}
+
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Tokenizer<'de> {
     input: &'de str,
     location: Located<'de, ()>,
@@ -248,13 +255,13 @@ impl<'de> Tokenizer<'de> {
             .parse(input)
     }
 
-    fn string_plain<'a>(input: &'a str) -> IResult<&'a str, ()> {
+    fn string_plain<'a>(input: &'a str) -> IResult<&'a str, StringChunk<'a>> {
         combinator::verify(bytes::is_not("\"\\"), |s: &str| !s.is_empty())
-            .map(|_| ())
+            .map(StringChunk::Str)
             .parse(input)
     }
 
-    fn string_escape<'a>(input: &'a str) -> IResult<&'a str, ()> {
+    fn string_escape<'a>(input: &'a str) -> IResult<&'a str, StringChunk<'a>> {
         branch::alt((
             character::char('n').map(|_| '\n'),
             character::char('r').map(|_| '\r'),
@@ -265,12 +272,12 @@ impl<'de> Tokenizer<'de> {
             character::char('\'').map(|_| '\''),
             // todo: \xNN, \u{NNNN}
         ))
-        .map(|_| ())
+        .map(StringChunk::Char)
         .parse(input)
         .map_err(|e| e.map(|e: NomError<_>| e.replace(TokenError::UnknownEscape)))
     }
 
-    pub(crate) fn string_chunk<'a>(input: &'a str) -> IResult<&'a str, ()> {
+    pub(crate) fn string_chunk<'a>(input: &'a str) -> IResult<&'a str, StringChunk<'a>> {
         branch::alt((
             Self::string_plain,
             sequence::preceded(character::char('\\'), combinator::cut(Self::string_escape)),
