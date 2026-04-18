@@ -1,5 +1,6 @@
-use super::{LocResult, Located, Location, TokenError, Tokenizer};
+use super::{TokenError, Tokenizer};
 use crate::syntax::{Event, Token, TokenKind};
+use crate::types::{LocResult, Located, Location};
 use crate::Flavor;
 
 #[derive(Clone, Debug, thiserror::Error)]

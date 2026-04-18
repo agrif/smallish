@@ -3,9 +3,8 @@ use nom::{
     sequence, Parser,
 };
 
-use super::{LocResult, Located};
 use crate::syntax::{Integer, Token, Value};
-use crate::types::Escaped;
+use crate::types::{Escaped, LocResult, Located};
 
 #[derive(Clone, Debug, thiserror::Error)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]

@@ -20,7 +20,10 @@ pub enum Flavor {
     Map,
 }
 
-pub fn from_str<'de, T>(flavor: Flavor, input: &'de str) -> Result<T, de::Located<'de, de::Error>>
+pub fn from_str<'de, T>(
+    flavor: Flavor,
+    input: &'de str,
+) -> Result<T, types::Located<'de, de::Error>>
 where
     T: serde::de::Deserialize<'de>,
 {
@@ -32,7 +35,7 @@ pub fn from_str_escaped<'de, T>(
     flavor: Flavor,
     input: &'de str,
     unescape: &'de mut [u8],
-) -> Result<T, de::Located<'de, de::Error>>
+) -> Result<T, types::Located<'de, de::Error>>
 where
     T: serde::de::Deserialize<'de>,
 {

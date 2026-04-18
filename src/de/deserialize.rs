@@ -1,9 +1,9 @@
 use as_variant::as_variant;
 use serde::de;
 
-use super::{Located, ParseError, Parser, ParserState};
+use super::{ParseError, Parser, ParserState};
 use crate::syntax::{Event, Float, Integer, Value};
-use crate::types::UnescapeError;
+use crate::types::{Located, UnescapeError};
 use crate::Flavor;
 
 #[derive(Clone, Debug, thiserror::Error)]
