@@ -81,20 +81,20 @@ enum State {
 
 #[derive(Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct Parser<'de, 'state> {
+pub struct Parser<'de, S> {
     tokens: Tokenizer<'de>,
     initial_state: State,
-    state: &'state mut [ParserState],
+    state: S,
     state_top: usize,
     unused_token: Option<LocResult<'de, Token<'de>, TokenError>>,
     initial_state_sent: bool,
 }
 
-impl<'de, 'state> Parser<'de, 'state> {
-    pub fn new<S>(flavor: Flavor, input: &'de str, state: &'state mut S) -> Self
-    where
-        S: AsMut<[ParserState]> + ?Sized,
-    {
+impl<'de, S> Parser<'de, S>
+where
+    S: AsRef<[ParserState]> + AsMut<[ParserState]>,
+{
+    pub fn new(flavor: Flavor, input: &'de str, state: S) -> Self {
         let initial_state = match flavor {
             Flavor::Value => State::Value,
             Flavor::List => State::ListItem,
@@ -104,7 +104,7 @@ impl<'de, 'state> Parser<'de, 'state> {
         Self {
             tokens: Tokenizer::new(input),
             initial_state,
-            state: state.as_mut(),
+            state: state,
             state_top: 0,
             unused_token: None,
             initial_state_sent: false,
@@ -130,7 +130,7 @@ impl<'de, 'state> Parser<'de, 'state> {
     fn located_state(&self) -> Option<Located<'de, State>> {
         self.state_top
             .checked_sub(1)
-            .and_then(|i| self.state.get(i))
+            .and_then(|i| self.state.as_ref().get(i))
             .copied()
             .map(|ParserState(location, value)| Located {
                 source: self.location().source,
@@ -142,7 +142,7 @@ impl<'de, 'state> Parser<'de, 'state> {
     fn state(&self) -> State {
         self.state_top
             .checked_sub(1)
-            .and_then(|i| self.state.get(i))
+            .and_then(|i| self.state.as_ref().get(i))
             .map(|s| s.1)
             .unwrap_or(self.initial_state)
     }
@@ -151,7 +151,7 @@ impl<'de, 'state> Parser<'de, 'state> {
         if let Some(dest) = self
             .state_top
             .checked_sub(1)
-            .and_then(|i| self.state.get_mut(i))
+            .and_then(|i| self.state.as_mut().get_mut(i))
         {
             dest.1 = state;
         } else {
@@ -160,8 +160,8 @@ impl<'de, 'state> Parser<'de, 'state> {
     }
 
     fn push(&mut self, loc: &Located<'de, ()>, state: State) -> Result<(), ParseError> {
-        if self.state_top < self.state.len() {
-            self.state[self.state_top] = ParserState(loc.location, state);
+        if self.state_top < self.state.as_ref().len() {
+            self.state.as_mut()[self.state_top] = ParserState(loc.location, state);
             self.state_top += 1;
             Ok(())
         } else {

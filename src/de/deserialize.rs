@@ -94,16 +94,19 @@ impl de::Error for Error {
 
 #[derive(Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct Deserializer<'de, 'state> {
-    parser: Parser<'de, 'state>,
+pub struct Deserializer<'de, S> {
+    parser: Parser<'de, S>,
     peeked: Option<Event<'de>>,
     location: Located<'de, ()>,
     unescape: &'de mut [u8],
     immediately_after_enum_name: bool,
 }
 
-impl<'de, 'state> Deserializer<'de, 'state> {
-    pub fn from_parser(parser: Parser<'de, 'state>, unescape: &'de mut [u8]) -> Self {
+impl<'de, S> Deserializer<'de, S>
+where
+    S: AsRef<[ParserState]> + AsMut<[ParserState]>,
+{
+    pub fn from_parser(parser: Parser<'de, S>, unescape: &'de mut [u8]) -> Self {
         Self {
             location: parser.location().clone(),
             parser: parser,
@@ -113,15 +116,7 @@ impl<'de, 'state> Deserializer<'de, 'state> {
         }
     }
 
-    pub fn new<S>(
-        flavor: Flavor,
-        input: &'de str,
-        state: &'state mut S,
-        unescape: &'de mut [u8],
-    ) -> Self
-    where
-        S: AsMut<[ParserState]> + ?Sized,
-    {
+    pub fn new(flavor: Flavor, input: &'de str, state: S, unescape: &'de mut [u8]) -> Self {
         Self::from_parser(Parser::new(flavor, input, state), unescape)
     }
 
@@ -189,7 +184,10 @@ impl<'de, 'state> Deserializer<'de, 'state> {
     }
 }
 
-impl<'de, 'state> de::Deserializer<'de> for &mut Deserializer<'de, 'state> {
+impl<'de, S> de::Deserializer<'de> for &mut Deserializer<'de, S>
+where
+    S: AsRef<[ParserState]> + AsMut<[ParserState]>,
+{
     type Error = Error;
 
     fn deserialize_any<V>(self, _visitor: V) -> Result<V::Value, Self::Error>
@@ -553,17 +551,20 @@ impl<'de, 'state> de::Deserializer<'de> for &mut Deserializer<'de, 'state> {
 
 #[derive(Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-struct Access<'a, 'de: 'a, 'state> {
-    de: &'a mut Deserializer<'de, 'state>,
+struct Access<'a, 'de: 'a, S> {
+    de: &'a mut Deserializer<'de, S>,
 }
 
-impl<'a, 'de, 'state> Access<'a, 'de, 'state> {
-    fn new(de: &'a mut Deserializer<'de, 'state>) -> Self {
+impl<'a, 'de, S> Access<'a, 'de, S> {
+    fn new(de: &'a mut Deserializer<'de, S>) -> Self {
         Self { de }
     }
 }
 
-impl<'a, 'de, 'state> de::SeqAccess<'de> for Access<'a, 'de, 'state> {
+impl<'a, 'de, S> de::SeqAccess<'de> for Access<'a, 'de, S>
+where
+    S: AsRef<[ParserState]> + AsMut<[ParserState]>,
+{
     type Error = Error;
 
     fn next_element_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>, Self::Error>
@@ -582,7 +583,10 @@ impl<'a, 'de, 'state> de::SeqAccess<'de> for Access<'a, 'de, 'state> {
     }
 }
 
-impl<'a, 'de, 'state> de::EnumAccess<'de> for Access<'a, 'de, 'state> {
+impl<'a, 'de, S> de::EnumAccess<'de> for Access<'a, 'de, S>
+where
+    S: AsRef<[ParserState]> + AsMut<[ParserState]>,
+{
     type Error = Error;
     type Variant = Self;
 
@@ -598,7 +602,10 @@ impl<'a, 'de, 'state> de::EnumAccess<'de> for Access<'a, 'de, 'state> {
     }
 }
 
-impl<'a, 'de, 'state> de::VariantAccess<'de> for Access<'a, 'de, 'state> {
+impl<'a, 'de, S> de::VariantAccess<'de> for Access<'a, 'de, S>
+where
+    S: AsRef<[ParserState]> + AsMut<[ParserState]>,
+{
     type Error = Error;
 
     fn unit_variant(self) -> Result<(), Self::Error> {
@@ -631,7 +638,10 @@ impl<'a, 'de, 'state> de::VariantAccess<'de> for Access<'a, 'de, 'state> {
     }
 }
 
-impl<'a, 'de, 'state> de::MapAccess<'de> for Access<'a, 'de, 'state> {
+impl<'a, 'de, S> de::MapAccess<'de> for Access<'a, 'de, S>
+where
+    S: AsRef<[ParserState]> + AsMut<[ParserState]>,
+{
     type Error = Error;
 
     fn next_key_seed<K>(&mut self, seed: K) -> Result<Option<K::Value>, Self::Error>
