@@ -42,6 +42,7 @@ enum Direction {
     South,
     East,
     West,
+    Turnwise(u8),
 }
 
 static SOURCE: &str = r#"
@@ -50,6 +51,7 @@ Wait 1000
 Draw true
 Vec 0 1 2
 Go dir=North
+Go dir=(Turnwise 2)
 Go dir=null opts={sub={flag=true}}
 SetOptions foo={flag=false} bar="bar"
 SetOptions bar="hello\nworld"
