@@ -20,6 +20,29 @@ pub enum Flavor {
     Map,
 }
 
+pub fn from_slice<'de, T>(
+    flavor: Flavor,
+    input: &'de [u8],
+) -> Result<T, types::Located<'de, de::Error>>
+where
+    T: serde::de::Deserialize<'de>,
+{
+    let mut state = [Default::default(); 64];
+    de::Deserializer::new(flavor, input, &mut state, &mut []).deserialize()
+}
+
+pub fn from_slice_escaped<'de, T>(
+    flavor: Flavor,
+    input: &'de [u8],
+    unescape: &'de mut [u8],
+) -> Result<T, types::Located<'de, de::Error>>
+where
+    T: serde::de::Deserialize<'de>,
+{
+    let mut state = [Default::default(); 64];
+    de::Deserializer::new(flavor, input, &mut state, unescape).deserialize()
+}
+
 pub fn from_str<'de, T>(
     flavor: Flavor,
     input: &'de str,
@@ -27,8 +50,7 @@ pub fn from_str<'de, T>(
 where
     T: serde::de::Deserialize<'de>,
 {
-    let mut state = [Default::default(); 64];
-    de::Deserializer::new(flavor, input, &mut state, &mut []).deserialize()
+    from_slice(flavor, input.as_bytes())
 }
 
 pub fn from_str_escaped<'de, T>(
@@ -39,6 +61,5 @@ pub fn from_str_escaped<'de, T>(
 where
     T: serde::de::Deserialize<'de>,
 {
-    let mut state = [Default::default(); 64];
-    de::Deserializer::new(flavor, input, &mut state, unescape).deserialize()
+    from_slice_escaped(flavor, input.as_bytes(), unescape)
 }

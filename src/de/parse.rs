@@ -10,6 +10,8 @@ pub enum ParseError {
     Eof,
     #[error("unknown token")]
     UnknownToken,
+    #[error("invalid utf-8")]
+    InvalidUtf8,
     #[error("unknown escape sequence")]
     UnknownEscape,
     #[error("unexpected {0:?}, expected one of {1:?}")]
@@ -27,6 +29,7 @@ impl From<TokenError> for ParseError {
         match err {
             TokenError::Eof => Self::Eof,
             TokenError::UnknownToken => Self::UnknownToken,
+            TokenError::InvalidUtf8 => Self::InvalidUtf8,
             TokenError::UnknownEscape => Self::UnknownEscape,
         }
     }
@@ -95,7 +98,7 @@ impl<'de, S> Parser<'de, S>
 where
     S: AsRef<[ParserState]> + AsMut<[ParserState]>,
 {
-    pub fn new(flavor: Flavor, input: &'de str, state: S) -> Self {
+    pub fn new(flavor: Flavor, input: &'de [u8], state: S) -> Self {
         let initial_state = match flavor {
             Flavor::Value => State::Value,
             Flavor::List => State::ListItem,

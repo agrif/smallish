@@ -13,6 +13,8 @@ pub enum TokenError {
     Eof,
     #[error("unknown token")]
     UnknownToken,
+    #[error("invalid utf-8")]
+    InvalidUtf8,
     #[error("unknown escape sequence")]
     UnknownEscape,
 }
@@ -65,12 +67,12 @@ pub(crate) enum SliceChunk<I: nom::Input> {
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Tokenizer<'de> {
-    input: &'de str,
+    input: &'de [u8],
     location: Located<'de, ()>,
 }
 
 impl<'de> Tokenizer<'de> {
-    pub fn new(input: &'de str) -> Self {
+    pub fn new(input: &'de [u8]) -> Self {
         let mut tokenizer = Self {
             input,
             location: Located::new().with_source(Some(input)),
@@ -89,7 +91,7 @@ impl<'de> Tokenizer<'de> {
 
     fn parse<P>(&mut self, mut parser: P) -> LocResult<'de, P::Output, TokenError>
     where
-        P: nom::Parser<&'de str, Error = NomError<&'de str>>,
+        P: Parser<&'de [u8], Error = NomError<&'de [u8]>>,
     {
         if self.is_eof() {
             return Err(self.location.wrap(TokenError::Eof));
@@ -125,7 +127,25 @@ impl<'de> Tokenizer<'de> {
         self.parse(combinator::peek(Self::token))
     }
 
-    fn whitespace_single(input: &str) -> IResult<&str, ()> {
+    fn parse_utf8<'a, P>(
+        mut parser: P,
+    ) -> impl Parser<&'a [u8], Error = NomError<&'a [u8]>, Output = &'a str>
+    where
+        P: Parser<&'a [u8], Error = NomError<&'a [u8]>, Output = &'a [u8]>,
+    {
+        move |input| {
+            let (rest, s) = parser.parse(input)?;
+            match core::str::from_utf8(s) {
+                Ok(s) => Ok((rest, s)),
+                Err(e) => Err(nom::Err::Failure(NomError {
+                    input: input.get(e.valid_up_to()..).unwrap_or(input),
+                    error: TokenError::InvalidUtf8,
+                })),
+            }
+        }
+    }
+
+    fn whitespace_single(input: &[u8]) -> IResult<&[u8], ()> {
         branch::alt((
             character::space1,
             sequence::preceded(character::char('#'), character::not_line_ending),
@@ -134,47 +154,47 @@ impl<'de> Tokenizer<'de> {
         .parse(input)
     }
 
-    fn whitespace1(input: &str) -> IResult<&str, ()> {
+    fn whitespace1(input: &[u8]) -> IResult<&[u8], ()> {
         multi::many1_count(Self::whitespace_single)
             .map(|_| ())
             .parse(input)
     }
 
-    fn whitespace0(input: &str) -> IResult<&str, ()> {
+    fn whitespace0(input: &[u8]) -> IResult<&[u8], ()> {
         multi::many0_count(Self::whitespace_single)
             .map(|_| ())
             .parse(input)
     }
 
-    fn newlines1(input: &str) -> IResult<&str, ()> {
+    fn newlines1(input: &[u8]) -> IResult<&[u8], ()> {
         multi::many1_count((character::line_ending, Self::whitespace0))
             .map(|_| ())
             .parse(input)
     }
 
-    fn newlines0(input: &str) -> IResult<&str, ()> {
+    fn newlines0(input: &[u8]) -> IResult<&[u8], ()> {
         multi::many0_count((character::line_ending, Self::whitespace0))
             .map(|_| ())
             .parse(input)
     }
 
-    fn whitespace_and_newlines0(input: &str) -> IResult<&str, ()> {
+    fn whitespace_and_newlines0(input: &[u8]) -> IResult<&[u8], ()> {
         (Self::whitespace0, Self::newlines0)
             .map(|_| ())
             .parse(input)
     }
 
-    fn newline<'a>(input: &'a str) -> IResult<&'a str, Token<'a>> {
+    fn newline<'a>(input: &'a [u8]) -> IResult<&'a [u8], Token<'a>> {
         Self::newlines1.map(|_| Token::Newline).parse(input)
     }
 
-    fn comma<'a>(input: &'a str) -> IResult<&'a str, Token<'a>> {
+    fn comma<'a>(input: &'a [u8]) -> IResult<&'a [u8], Token<'a>> {
         sequence::preceded(character::char(','), Self::newlines0)
             .map(|_| Token::Comma)
             .parse(input)
     }
 
-    fn symbol<'a>(input: &'a str) -> IResult<&'a str, Token<'a>> {
+    fn symbol<'a>(input: &'a [u8]) -> IResult<&'a [u8], Token<'a>> {
         branch::alt((
             character::char(',').map(|_| Token::Comma),
             character::char('=').map(|_| Token::Equals),
@@ -188,7 +208,7 @@ impl<'de> Tokenizer<'de> {
         .parse(input)
     }
 
-    fn token_boundary(input: &str) -> IResult<&str, ()> {
+    fn token_boundary(input: &[u8]) -> IResult<&[u8], ()> {
         combinator::peek(branch::alt((
             combinator::eof.map(|_| ()),
             character::line_ending.map(|_| ()),
@@ -198,47 +218,51 @@ impl<'de> Tokenizer<'de> {
         .parse(input)
     }
 
-    fn ident(input: &str) -> IResult<&str, &str> {
+    fn ident(input: &[u8]) -> IResult<&[u8], &str> {
         sequence::terminated(
             combinator::verify(
-                bytes::take_while1(|c: char| c.is_ascii_alphanumeric() || c == '_'),
-                |s: &str| !s.starts_with(|c: char| c.is_ascii_digit()),
+                bytes::take_while1(|c: u8| c.is_ascii_alphanumeric() || c == b'_'),
+                |s: &[u8]| !s.get(0).map(u8::is_ascii_digit).unwrap_or(true),
             ),
             Self::token_boundary,
         )
+        // safety: the above parser only matches valid ascii
+        .map(|s| unsafe { core::str::from_utf8_unchecked(s) })
         .parse(input)
     }
 
-    fn integer<'a>(input: &'a str) -> IResult<&'a str, Token<'a>> {
+    fn integer<'a>(input: &'a [u8]) -> IResult<&'a [u8], Token<'a>> {
         let (input, sign) = combinator::opt(character::one_of("-+")).parse(input)?;
 
         let (input, mut value) = branch::alt((
             sequence::terminated(
                 sequence::preceded(
                     (character::char('0'), character::one_of("xX")),
-                    character::hex_digit1.map_res(|s| Integer::from_str_radix(s, 16)),
+                    character::hex_digit1.map(|s| (s, 16)),
                 ),
                 Self::token_boundary,
             ),
             sequence::terminated(
                 sequence::preceded(
                     (character::char('0'), character::one_of("oO")),
-                    character::oct_digit1.map_res(|s| Integer::from_str_radix(s, 8)),
+                    character::oct_digit1.map(|s| (s, 8)),
                 ),
                 Self::token_boundary,
             ),
             sequence::terminated(
                 sequence::preceded(
                     (character::char('0'), character::one_of("bB")),
-                    character::bin_digit1.map_res(|s| Integer::from_str_radix(s, 2)),
+                    character::bin_digit1.map(|s| (s, 2)),
                 ),
                 Self::token_boundary,
             ),
-            sequence::terminated(
-                character::digit1.map_res(|s| Integer::from_str_radix(s, 10)),
-                Self::token_boundary,
-            ),
+            sequence::terminated(character::digit1.map(|s| (s, 10)), Self::token_boundary),
         ))
+        .map_res(|(s, radix)| {
+            // safety: the above only matches valid ascii
+            let s = unsafe { core::str::from_utf8_unchecked(s) };
+            Integer::from_str_radix(s, radix)
+        })
         .parse(input)?;
 
         if sign.unwrap_or('+') == '-' {
@@ -248,19 +272,21 @@ impl<'de> Tokenizer<'de> {
         Ok((input, Token::Value(Value::Integer(value))))
     }
 
-    fn float<'a>(input: &'a str) -> IResult<&'a str, Token<'a>> {
+    fn float<'a>(input: &'a [u8]) -> IResult<&'a [u8], Token<'a>> {
         sequence::terminated(nom::number::float(), Self::token_boundary)
             .map(|f| Token::Value(Value::Float(f)))
             .parse(input)
     }
 
-    fn string_plain<'a>(input: &'a str) -> IResult<&'a str, SliceChunk<&'a str>> {
-        combinator::verify(bytes::is_not("\"\\"), |s: &str| !s.is_empty())
-            .map(SliceChunk::Slice)
-            .parse(input)
+    fn string_plain<'a>(input: &'a [u8]) -> IResult<&'a [u8], SliceChunk<&'a str>> {
+        Self::parse_utf8(combinator::verify(bytes::is_not("\"\\"), |s: &[u8]| {
+            !s.is_empty()
+        }))
+        .map(SliceChunk::Slice)
+        .parse(input)
     }
 
-    fn string_escape<'a>(input: &'a str) -> IResult<&'a str, SliceChunk<&'a str>> {
+    fn string_escape<'a>(input: &'a [u8]) -> IResult<&'a [u8], SliceChunk<&'a str>> {
         branch::alt((
             character::char('n').map(|_| '\n'),
             character::char('r').map(|_| '\r'),
@@ -276,7 +302,7 @@ impl<'de> Tokenizer<'de> {
         .map_err(|e| e.map(|e: NomError<_>| e.replace(TokenError::UnknownEscape)))
     }
 
-    pub(crate) fn string_chunk<'a>(input: &'a str) -> IResult<&'a str, SliceChunk<&'a str>> {
+    pub(crate) fn string_chunk<'a>(input: &'a [u8]) -> IResult<&'a [u8], SliceChunk<&'a str>> {
         branch::alt((
             Self::string_plain,
             sequence::preceded(character::char('\\'), combinator::cut(Self::string_escape)),
@@ -284,17 +310,24 @@ impl<'de> Tokenizer<'de> {
         .parse(input)
     }
 
-    fn string<'a>(input: &'a str) -> IResult<&'a str, Token<'a>> {
+    fn string<'a>(input: &'a [u8]) -> IResult<&'a [u8], Token<'a>> {
         sequence::delimited(
             character::char('"'),
-            combinator::recognize(multi::many0_count(Self::string_chunk)),
+            combinator::cut(combinator::recognize(multi::many0_count(
+                Self::string_chunk,
+            ))),
             character::char('"'),
         )
-        .map(|s| Token::Value(Value::String(Escaped::new_unchecked(s))))
+        .map(|s| {
+            Token::Value(Value::String(Escaped::new_unchecked(
+                // safety: the string parsers already check for utf-8
+                unsafe { core::str::from_utf8_unchecked(s) },
+            )))
+        })
         .parse(input)
     }
 
-    fn token<'a>(input: &'a str) -> IResult<&'a str, Token<'a>> {
+    fn token<'a>(input: &'a [u8]) -> IResult<&'a [u8], Token<'a>> {
         branch::alt((
             sequence::terminated(Self::newline, Self::whitespace0),
             sequence::terminated(Self::comma, Self::whitespace0),

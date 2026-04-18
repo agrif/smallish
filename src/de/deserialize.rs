@@ -116,7 +116,7 @@ where
         }
     }
 
-    pub fn new(flavor: Flavor, input: &'de str, state: S, unescape: &'de mut [u8]) -> Self {
+    pub fn new(flavor: Flavor, input: &'de [u8], state: S, unescape: &'de mut [u8]) -> Self {
         Self::from_parser(Parser::new(flavor, input, state), unescape)
     }
 

@@ -33,7 +33,7 @@ impl core::fmt::Display for Location {
 #[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Located<'de, T> {
-    pub source: Option<&'de str>,
+    pub source: Option<&'de [u8]>,
     pub location: Location,
     pub value: T,
 }
@@ -49,7 +49,7 @@ impl Located<'static, ()> {
 }
 
 impl<'de, T> Located<'de, T> {
-    pub fn with_source<'a>(self, source: Option<&'a str>) -> Located<'a, T> {
+    pub fn with_source<'a>(self, source: Option<&'a [u8]>) -> Located<'a, T> {
         Located { source, ..self }
     }
 
@@ -60,7 +60,7 @@ impl<'de, T> Located<'de, T> {
         }
     }
 
-    pub(crate) fn advance(&mut self, start: &'de str, end: &'de str) {
+    pub(crate) fn advance(&mut self, start: &'de [u8], end: &'de [u8]) {
         if start.len() < end.len() {
             return;
         }
@@ -69,7 +69,7 @@ impl<'de, T> Located<'de, T> {
         let amt = new.len();
         let mut newlines = 0;
         let mut last_newline = None;
-        for (i, _) in new.bytes().enumerate().filter(|(_, c)| *c == b'\n') {
+        for (i, _) in new.iter().enumerate().filter(|(_, c)| **c == b'\n') {
             newlines += 1;
             last_newline = Some(i);
         }
@@ -118,14 +118,16 @@ impl<'de, T> Located<'de, T> {
         )
     }
 
-    pub fn source_line(&self) -> Option<&'de str> {
+    pub fn source_line(&self) -> Option<&'de [u8]> {
         let source = self.source?;
         let start = source[..self.location.offset]
-            .rfind('\n')
+            .iter()
+            .rposition(|c| *c == b'\n')
             .map(|i| i + 1)
             .unwrap_or(0);
         let end = source[self.location.offset..]
-            .find('\n')
+            .iter()
+            .position(|c| *c == b'\n')
             .map(|i| self.location.offset + i)
             .unwrap_or(source.len());
         Some(&source[start..end])
@@ -181,12 +183,11 @@ where
     T: core::fmt::Display,
 {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        writeln!(
-            f,
-            "{} at source location {}",
-            self.value, self.location.line
-        )?;
-        if let Some(line) = self.source_line() {
+        writeln!(f, "{} at source location {}", self.value, self.location)?;
+        if let Some(line) = self
+            .source_line()
+            .and_then(|s| core::str::from_utf8(s).ok())
+        {
             writeln!(f, "  | {}", line)?;
             writeln!(f, "    {}^", " ".repeat(self.location.column))?;
         }

@@ -28,9 +28,9 @@ where
 
     fn check(&self) -> Result<(), TokenError> {
         match combinator::recognize(multi::many0_count(Tokenizer::string_chunk))
-            .parse(self.0.borrow())
+            .parse(self.0.borrow().as_bytes())
         {
-            Ok(("", _)) => Ok(()),
+            Ok((b"", _)) => Ok(()),
             Ok(_) => Err(TokenError::UnknownToken),
             Err(nom::Err::Incomplete(_)) => Err(TokenError::UnknownToken),
             Err(nom::Err::Error(e) | nom::Err::Failure(e)) => Err(e.error),
@@ -39,9 +39,9 @@ where
 
     pub fn has_escapes(&self) -> bool {
         !matches!(
-            Tokenizer::string_chunk(self.0.borrow()),
+            Tokenizer::string_chunk(self.0.borrow().as_bytes()),
             // if there is a single slice chunk, it has no escapes
-            Ok(("", SliceChunk::Slice(_))),
+            Ok((b"", SliceChunk::Slice(_))),
         )
     }
 
@@ -49,7 +49,7 @@ where
         &self,
         buffer: &'a mut [u8],
     ) -> Result<(&'a mut [u8], &'a str), UnescapeError> {
-        let mut input = self.0.borrow();
+        let mut input = self.0.borrow().as_bytes();
         let mut i = 0;
         while !input.is_empty() {
             match Tokenizer::string_chunk(input) {

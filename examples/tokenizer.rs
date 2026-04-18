@@ -1,6 +1,6 @@
 use smallish::de;
 
-static SOURCE: &str = r#"
+static SOURCE: &[u8] = br#"
 some_enum a=bbb 25 4.0e2 [[0, 1], 2]
 bar {baz = "hello\nworld"}
 "#;
