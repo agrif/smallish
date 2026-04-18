@@ -2,22 +2,22 @@ use core::borrow::Borrow;
 
 use nom::{combinator, multi, Parser};
 
-use crate::de::{token::StringChunk, TokenError, Tokenizer};
+use crate::de::{token::SliceChunk, TokenError, Tokenizer};
 
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct EscapedStr<T>(T);
+pub struct Escaped<T>(T);
 
 #[derive(Clone, Debug, thiserror::Error)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum UnescapeError {
-    #[error("{0}")]
-    BadString(#[from] TokenError),
-    #[error("buffer full")]
+    #[error("bad unescaped literal")]
+    BadLiteral(#[from] TokenError),
+    #[error("unescape buffer full")]
     BufferFull,
 }
 
-impl<T> EscapedStr<T>
+impl<T> Escaped<T>
 where
     T: Borrow<str>,
 {
@@ -49,7 +49,7 @@ where
                     assert!(rest.len() < input.len());
                     input = rest;
                     match chunk {
-                        StringChunk::Str(s) => {
+                        SliceChunk::Slice(s) => {
                             let bytes = s.as_bytes();
                             let amt = bytes.len();
                             buffer
@@ -58,7 +58,7 @@ where
                                 .copy_from_slice(bytes);
                             i += amt;
                         }
-                        StringChunk::Char(c) => {
+                        SliceChunk::Item(c) => {
                             let amt = c.len_utf8();
                             c.encode_utf8(
                                 buffer
@@ -85,7 +85,7 @@ where
     }
 }
 
-impl<T> EscapedStr<T> {
+impl<T> Escaped<T> {
     pub fn new_unchecked(s: T) -> Self {
         Self(s)
     }
@@ -95,7 +95,7 @@ impl<T> EscapedStr<T> {
     }
 }
 
-impl<T> core::ops::Deref for EscapedStr<T> {
+impl<T> core::ops::Deref for Escaped<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -103,7 +103,7 @@ impl<T> core::ops::Deref for EscapedStr<T> {
     }
 }
 
-impl<T> core::fmt::Display for EscapedStr<T>
+impl<T> core::fmt::Display for Escaped<T>
 where
     T: core::fmt::Display,
 {

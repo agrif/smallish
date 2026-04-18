@@ -1,4 +1,4 @@
-use crate::types::EscapedStr;
+use crate::types::Escaped;
 
 pub type Integer = i64;
 pub type Float = f32;
@@ -28,7 +28,7 @@ pub enum Value<'de> {
     Bool(bool),
     Integer(Integer),
     Float(Float),
-    String(EscapedStr<&'de str>),
+    String(Escaped<&'de str>),
 }
 
 #[derive(Clone, Debug)]

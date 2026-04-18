@@ -5,7 +5,7 @@ use nom::{
 
 use super::{LocResult, Located};
 use crate::syntax::{Integer, Token, Value};
-use crate::types::EscapedStr;
+use crate::types::Escaped;
 
 #[derive(Clone, Debug, thiserror::Error)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
@@ -58,9 +58,9 @@ type IResult<I, O> = nom::IResult<I, O, NomError<I>>;
 
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub(crate) enum StringChunk<'de> {
-    Str(&'de str),
-    Char(char),
+pub(crate) enum SliceChunk<I: nom::Input> {
+    Slice(I),
+    Item(I::Item),
 }
 
 #[derive(Clone, Debug)]
@@ -255,13 +255,13 @@ impl<'de> Tokenizer<'de> {
             .parse(input)
     }
 
-    fn string_plain<'a>(input: &'a str) -> IResult<&'a str, StringChunk<'a>> {
+    fn string_plain<'a>(input: &'a str) -> IResult<&'a str, SliceChunk<&'a str>> {
         combinator::verify(bytes::is_not("\"\\"), |s: &str| !s.is_empty())
-            .map(StringChunk::Str)
+            .map(SliceChunk::Slice)
             .parse(input)
     }
 
-    fn string_escape<'a>(input: &'a str) -> IResult<&'a str, StringChunk<'a>> {
+    fn string_escape<'a>(input: &'a str) -> IResult<&'a str, SliceChunk<&'a str>> {
         branch::alt((
             character::char('n').map(|_| '\n'),
             character::char('r').map(|_| '\r'),
@@ -272,12 +272,12 @@ impl<'de> Tokenizer<'de> {
             character::char('\'').map(|_| '\''),
             // todo: \xNN, \u{NNNN}
         ))
-        .map(StringChunk::Char)
+        .map(SliceChunk::Item)
         .parse(input)
         .map_err(|e| e.map(|e: NomError<_>| e.replace(TokenError::UnknownEscape)))
     }
 
-    pub(crate) fn string_chunk<'a>(input: &'a str) -> IResult<&'a str, StringChunk<'a>> {
+    pub(crate) fn string_chunk<'a>(input: &'a str) -> IResult<&'a str, SliceChunk<&'a str>> {
         branch::alt((
             Self::string_plain,
             sequence::preceded(character::char('\\'), combinator::cut(Self::string_escape)),
@@ -291,7 +291,7 @@ impl<'de> Tokenizer<'de> {
             combinator::recognize(multi::many0_count(Self::string_chunk)),
             character::char('"'),
         )
-        .map(|s| Token::Value(Value::String(EscapedStr::new_unchecked(s))))
+        .map(|s| Token::Value(Value::String(Escaped::new_unchecked(s))))
         .parse(input)
     }
 

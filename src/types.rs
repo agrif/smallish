@@ -1,3 +1,3 @@
 mod escaped;
 
-pub use escaped::{EscapedStr, UnescapeError};
+pub use escaped::{Escaped, UnescapeError};
