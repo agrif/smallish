@@ -28,6 +28,7 @@ pub enum Value<'de> {
     Bool(bool),
     Integer(Integer),
     Float(Float),
+    Character(char),
     String(Escaped<&'de str>),
 }
 

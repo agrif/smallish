@@ -286,7 +286,7 @@ impl<'de> Tokenizer<'de> {
         .parse(input)
     }
 
-    fn string_escape<'a>(input: &'a [u8]) -> IResult<&'a [u8], SliceChunk<&'a str>> {
+    fn character_escape<'a>(input: &'a [u8]) -> IResult<&'a [u8], char> {
         branch::alt((
             character::char('n').map(|_| '\n'),
             character::char('r').map(|_| '\r'),
@@ -297,15 +297,20 @@ impl<'de> Tokenizer<'de> {
             character::char('\'').map(|_| '\''),
             // todo: \xNN, \u{NNNN}
         ))
-        .map(SliceChunk::Item)
         .parse(input)
-        .map_err(|e| e.map(|e: NomError<_>| e.replace(TokenError::UnknownEscape)))
+    }
+
+    fn string_escape<'a>(input: &'a [u8]) -> IResult<&'a [u8], SliceChunk<&'a str>> {
+        Self::character_escape
+            .map(SliceChunk::Item)
+            .parse(input)
+            .map_err(|e| e.map(|e: NomError<_>| e.replace(TokenError::UnknownEscape)))
     }
 
     pub(crate) fn string_chunk<'a>(input: &'a [u8]) -> IResult<&'a [u8], SliceChunk<&'a str>> {
         branch::alt((
             Self::string_plain,
-            sequence::preceded(character::char('\\'), combinator::cut(Self::string_escape)),
+            sequence::preceded(character::char('\\'), Self::string_escape),
         ))
         .parse(input)
     }
@@ -327,6 +332,28 @@ impl<'de> Tokenizer<'de> {
         .parse(input)
     }
 
+    fn character<'a>(input: &'a [u8]) -> IResult<&'a [u8], Token<'a>> {
+        sequence::delimited(
+            character::char('\''),
+            combinator::cut(branch::alt((
+                bytes::is_not("'\\").map_opt(|s: &[u8]| {
+                    if s.len() > 4 {
+                        return None;
+                    }
+                    let s = core::str::from_utf8(s).ok()?;
+                    if s.chars().count() != 1 {
+                        return None;
+                    }
+                    s.chars().next()
+                }),
+                sequence::preceded(character::char('\\'), Self::character_escape),
+            ))),
+            character::char('\''),
+        )
+        .map(|c| Token::Value(Value::Character(c)))
+        .parse(input)
+    }
+
     fn token<'a>(input: &'a [u8]) -> IResult<&'a [u8], Token<'a>> {
         branch::alt((
             sequence::terminated(Self::newline, Self::whitespace0),
@@ -334,6 +361,7 @@ impl<'de> Tokenizer<'de> {
             sequence::terminated(Self::symbol, Self::whitespace0),
             sequence::terminated(Self::integer, Self::whitespace0),
             sequence::terminated(Self::float, Self::whitespace0),
+            sequence::terminated(Self::character, Self::whitespace0),
             sequence::terminated(Self::string, Self::whitespace0),
             sequence::terminated(Self::ident, Self::whitespace0).map(|id| match id {
                 "null" => Token::Value(Value::Null),
