@@ -282,6 +282,11 @@ impl<'de, 'state> Parser<'de, 'state> {
                     self.push(loc, State::Value)?;
                     Ok(None)
                 }
+                Token::ListOpen => {
+                    self.transition(State::ListSep);
+                    self.push(loc, State::ListItem)?;
+                    Ok(Some(Event::ListOpen))
+                }
                 Token::ListClose => {
                     self.pop()?;
                     Ok(Some(Event::ListClose))
@@ -300,7 +305,12 @@ impl<'de, 'state> Parser<'de, 'state> {
                     self.transition(State::ListSep);
                     Ok(Some(Event::Value(v)))
                 }
-                t => self.unexpected(t, &[Newline, ParenOpen, ListClose, MapOpen, Ident, Value]),
+                t => self.unexpected(
+                    t,
+                    &[
+                        Newline, ParenOpen, ListOpen, ListClose, MapOpen, Ident, Value,
+                    ],
+                ),
             },
 
             State::ListSep => match tok {
