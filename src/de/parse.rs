@@ -1,4 +1,4 @@
-use super::{LocResult, Located, TokenError, Tokenizer};
+use super::{LocResult, Located, Location, TokenError, Tokenizer};
 use crate::syntax::{Event, Token, TokenKind};
 use crate::Flavor;
 
@@ -37,26 +37,28 @@ impl<'de> From<Located<'de, TokenError>> for Located<'de, ParseError> {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default)]
-pub struct ParserState {
-    // eat the complication that static brings here, so that users can
-    // allocate this buffer statically
-    state: Located<'static, State>,
-}
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub struct ParserState(Location, State);
 
 impl ParserState {
-    pub const fn new() -> Self {
-        Self {
+    pub const fn zero() -> Self {
+        Self(
             // Use all zeros so this can be placed in bss if needed.
             // This is never used without being initialized first.
-            state: Located {
-                source: None,
+            Location {
                 line: 0,
                 column: 0,
                 offset: 0,
-                value: State::Value,
             },
-        }
+            State::Value,
+        )
+    }
+}
+
+impl Default for ParserState {
+    fn default() -> Self {
+        Self::zero()
     }
 }
 
@@ -129,14 +131,19 @@ impl<'de, 'state> Parser<'de, 'state> {
         self.state_top
             .checked_sub(1)
             .and_then(|i| self.state.get(i))
-            .map(|s| s.state.with_source(self.location().source))
+            .copied()
+            .map(|ParserState(location, value)| Located {
+                source: self.location().source,
+                location,
+                value,
+            })
     }
 
     fn state(&self) -> State {
         self.state_top
             .checked_sub(1)
             .and_then(|i| self.state.get(i))
-            .map(|s| *s.state)
+            .map(|s| s.1)
             .unwrap_or(self.initial_state)
     }
 
@@ -146,7 +153,7 @@ impl<'de, 'state> Parser<'de, 'state> {
             .checked_sub(1)
             .and_then(|i| self.state.get_mut(i))
         {
-            dest.state = dest.state.wrap(state);
+            dest.1 = state;
         } else {
             self.initial_state = state;
         }
@@ -154,7 +161,7 @@ impl<'de, 'state> Parser<'de, 'state> {
 
     fn push(&mut self, loc: &Located<'de, ()>, state: State) -> Result<(), ParseError> {
         if self.state_top < self.state.len() {
-            self.state[self.state_top].state = loc.wrap(state).without_source();
+            self.state[self.state_top] = ParserState(loc.location, state);
             self.state_top += 1;
             Ok(())
         } else {
