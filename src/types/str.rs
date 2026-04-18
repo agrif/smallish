@@ -1,10 +1,10 @@
 use core::borrow::Borrow;
 
-use nom::{combinator, multi, sequence, Parser};
+use nom::{combinator, multi, Parser};
 
 use crate::de::{TokenError, Tokenizer};
 
-#[derive(Clone, Debug, thiserror::Error)]
+#[derive(Clone, Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct EscapedStr<T>(T);
 
@@ -18,11 +18,8 @@ where
     }
 
     fn check(&self) -> Result<(), TokenError> {
-        match combinator::recognize(sequence::terminated(
-            multi::many0_count(Tokenizer::string_chunk),
-            combinator::eof,
-        ))
-        .parse(self.0.borrow())
+        match combinator::recognize(multi::many0_count(Tokenizer::string_chunk))
+            .parse(self.0.borrow())
         {
             Ok(("", _)) => Ok(()),
             Ok(_) => Err(TokenError::UnknownToken),
