@@ -1,20 +1,23 @@
 #[derive(Clone, Debug, serde::Deserialize)]
 #[allow(unused)]
-enum Instruction {
-    Go { dir: Option<Direction> },
+enum Instruction<'a> {
+    Go {
+        dir: Option<Direction>,
+    },
     Wait(u32),
     Draw(bool),
     Vec(u8, u8, u8),
-    SetOptions(Options),
+    #[serde(borrow)]
+    SetOptions(Options<'a>),
     Nop,
 }
 
 #[derive(Clone, Debug, serde::Deserialize)]
 #[allow(unused)]
-struct Options {
+struct Options<'a> {
     #[serde(default)]
     foo: u8,
-    bar: u8,
+    bar: &'a str,
 }
 
 #[derive(Clone, Debug, serde::Deserialize)]
@@ -33,8 +36,8 @@ Draw true
 Vec [0, 1, 2]
 Go dir=North
 Go dir=null
-SetOptions {foo=2, bar=8}
-SetOptions {bar=8}
+SetOptions {foo=2, bar="bar"}
+SetOptions {bar="hello\nworld"}
 "#;
 
 fn main() {

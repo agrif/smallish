@@ -307,18 +307,21 @@ impl<'de, 'state> de::Deserializer<'de> for &mut Deserializer<'de, 'state> {
         Err(Error::NotImplemented("char"))
     }
 
-    fn deserialize_str<V>(self, _visitor: V) -> Result<V::Value, Self::Error>
+    fn deserialize_str<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: de::Visitor<'de>,
     {
-        Err(Error::NotImplemented("str"))
+        let v = self.next_with(|t| {
+            as_variant!(t, Event::Value).and_then(as_variant!(Value::String(v) => *v))
+        })?;
+        visitor.visit_borrowed_str(v)
     }
 
-    fn deserialize_string<V>(self, _visitor: V) -> Result<V::Value, Self::Error>
+    fn deserialize_string<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: de::Visitor<'de>,
     {
-        Err(Error::NotImplemented("str"))
+        self.deserialize_str(visitor)
     }
 
     fn deserialize_bytes<V>(self, _visitor: V) -> Result<V::Value, Self::Error>

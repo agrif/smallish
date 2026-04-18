@@ -2,7 +2,7 @@ use smallish::{de, Flavor};
 
 static SOURCE: &str = r#"
 some_enum a=bbb 25 4.0e2
-bar {baz = 2}
+bar {baz = "hello\nworld"}
 "#;
 
 fn main() {
