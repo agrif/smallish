@@ -25,5 +25,17 @@ where
     T: serde::de::Deserialize<'de>,
 {
     let mut state = [Default::default(); 64];
-    de::Deserializer::new(flavor, input, &mut state).deserialize()
+    de::Deserializer::new(flavor, input, &mut state, &mut []).deserialize()
+}
+
+pub fn from_str_escaped<'de, T>(
+    flavor: Flavor,
+    input: &'de str,
+    unescape: &'de mut [u8],
+) -> Result<T, de::Located<'de, de::Error>>
+where
+    T: serde::de::Deserialize<'de>,
+{
+    let mut state = [Default::default(); 64];
+    de::Deserializer::new(flavor, input, &mut state, unescape).deserialize()
 }

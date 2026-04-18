@@ -3,6 +3,7 @@ use serde::de;
 
 use super::{Located, ParseError, Parser, ParserState};
 use crate::syntax::{Event, Float, Integer, Value};
+use crate::types::UnescapeError;
 use crate::Flavor;
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -18,6 +19,8 @@ pub enum Error {
     IntegerRange(Integer),
     #[error("float out of range: {0}")]
     FloatRange(Float),
+    #[error("unescape buffer full")]
+    BufferFull,
 
     #[error("unknown error")]
     Unknown,
@@ -40,6 +43,15 @@ pub enum Error {
 impl<'de> From<Located<'de, ParseError>> for Located<'de, Error> {
     fn from(other: Located<'de, ParseError>) -> Self {
         other.map(Into::into)
+    }
+}
+
+impl From<UnescapeError> for Error {
+    fn from(other: UnescapeError) -> Self {
+        match other {
+            UnescapeError::BadLiteral(e) => Error::Parse(e.into()),
+            UnescapeError::BufferFull => Error::BufferFull,
+        }
     }
 }
 
@@ -86,24 +98,31 @@ pub struct Deserializer<'de, 'state> {
     parser: Parser<'de, 'state>,
     peeked: Option<Event<'de>>,
     location: Located<'de, ()>,
+    unescape: &'de mut [u8],
     immediately_after_enum_name: bool,
 }
 
 impl<'de, 'state> Deserializer<'de, 'state> {
-    pub fn from_parser(parser: Parser<'de, 'state>) -> Self {
+    pub fn from_parser(parser: Parser<'de, 'state>, unescape: &'de mut [u8]) -> Self {
         Self {
             location: parser.location().clone(),
             parser: parser,
             peeked: None,
+            unescape,
             immediately_after_enum_name: false,
         }
     }
 
-    pub fn new<S>(flavor: Flavor, input: &'de str, state: &'state mut S) -> Self
+    pub fn new<S>(
+        flavor: Flavor,
+        input: &'de str,
+        state: &'state mut S,
+        unescape: &'de mut [u8],
+    ) -> Self
     where
         S: AsMut<[ParserState]> + ?Sized,
     {
-        Self::from_parser(Parser::new(flavor, input, state))
+        Self::from_parser(Parser::new(flavor, input, state), unescape)
     }
 
     pub fn deserialize<T>(&mut self) -> Result<T, Located<'de, Error>>
@@ -334,7 +353,15 @@ impl<'de, 'state> de::Deserializer<'de> for &mut Deserializer<'de, 'state> {
         let v = self.next_with(|t| {
             as_variant!(t, Event::Value).and_then(as_variant!(Value::String(v) => v))
         })?;
-        visitor.visit_borrowed_str(&v)
+
+        if v.has_escapes() {
+            let unescape = core::mem::replace(&mut self.unescape, &mut []);
+            let (unescape, v) = v.unescape(unescape)?;
+            self.unescape = unescape;
+            visitor.visit_borrowed_str(v)
+        } else {
+            visitor.visit_borrowed_str(*v)
+        }
     }
 
     fn deserialize_string<V>(self, visitor: V) -> Result<V::Value, Self::Error>

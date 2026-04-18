@@ -37,6 +37,14 @@ where
         }
     }
 
+    pub fn has_escapes(&self) -> bool {
+        !matches!(
+            Tokenizer::string_chunk(self.0.borrow()),
+            // if there is a single slice chunk, it has no escapes
+            Ok(("", SliceChunk::Slice(_))),
+        )
+    }
+
     pub fn unescape<'a>(
         &self,
         buffer: &'a mut [u8],

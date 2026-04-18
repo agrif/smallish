@@ -59,7 +59,12 @@ NewtypeTuple [0, 1] 2
 "#;
 
 fn main() {
-    match smallish::from_str::<Vec<Instruction>>(smallish::Flavor::List, SOURCE) {
+    let mut unescape_buffer = [0; 128];
+    match smallish::from_str_escaped::<Vec<Instruction>>(
+        smallish::Flavor::List,
+        SOURCE,
+        &mut unescape_buffer,
+    ) {
         Ok(instructions) => println!("{:#?}", instructions),
         Err(e) => println!("error: {}", e),
     }
