@@ -151,17 +151,17 @@ impl<'de, 'state> Deserializer<'de, 'state> {
         Ok(ev)
     }
 
-    fn next_with<T>(&mut self, f: impl FnOnce(&Event<'de>) -> Option<T>) -> Result<T, Error> {
+    fn next_with<T>(&mut self, f: impl FnOnce(Event<'de>) -> Option<T>) -> Result<T, Error> {
         let ev = self.next()?;
-        f(&ev).ok_or(Error::InvalidType)
+        f(ev).ok_or(Error::InvalidType)
     }
 
     fn peek_with<T>(
         &mut self,
-        f: impl FnOnce(&Event<'de>) -> Option<T>,
+        f: impl FnOnce(Event<'de>) -> Option<T>,
     ) -> Result<Option<T>, Error> {
         let ev = self.peek()?;
-        Ok(f(&ev))
+        Ok(f(ev))
     }
 
     fn consume(&mut self) {
@@ -185,7 +185,7 @@ impl<'de, 'state> de::Deserializer<'de> for &mut Deserializer<'de, 'state> {
         V: de::Visitor<'de>,
     {
         let v = self.next_with(|t| {
-            as_variant!(t, Event::Value).and_then(as_variant!(Value::Bool(v) => *v))
+            as_variant!(t, Event::Value).and_then(as_variant!(Value::Bool(v) => v))
         })?;
         visitor.visit_bool(v)
     }
@@ -195,7 +195,7 @@ impl<'de, 'state> de::Deserializer<'de> for &mut Deserializer<'de, 'state> {
         V: de::Visitor<'de>,
     {
         let v = self.next_with(|t| {
-            as_variant!(t, Event::Value).and_then(as_variant!(Value::Integer(v) => *v))
+            as_variant!(t, Event::Value).and_then(as_variant!(Value::Integer(v) => v))
         })?;
         let v = v.try_into().map_err(|_| Error::IntegerRange(v))?;
         visitor.visit_i8(v)
@@ -206,7 +206,7 @@ impl<'de, 'state> de::Deserializer<'de> for &mut Deserializer<'de, 'state> {
         V: de::Visitor<'de>,
     {
         let v = self.next_with(|t| {
-            as_variant!(t, Event::Value).and_then(as_variant!(Value::Integer(v) => *v))
+            as_variant!(t, Event::Value).and_then(as_variant!(Value::Integer(v) => v))
         })?;
         let v = v.try_into().map_err(|_| Error::IntegerRange(v))?;
         visitor.visit_u8(v)
@@ -217,7 +217,7 @@ impl<'de, 'state> de::Deserializer<'de> for &mut Deserializer<'de, 'state> {
         V: de::Visitor<'de>,
     {
         let v = self.next_with(|t| {
-            as_variant!(t, Event::Value).and_then(as_variant!(Value::Integer(v) => *v))
+            as_variant!(t, Event::Value).and_then(as_variant!(Value::Integer(v) => v))
         })?;
         let v = v.try_into().map_err(|_| Error::IntegerRange(v))?;
         visitor.visit_i16(v)
@@ -228,7 +228,7 @@ impl<'de, 'state> de::Deserializer<'de> for &mut Deserializer<'de, 'state> {
         V: de::Visitor<'de>,
     {
         let v = self.next_with(|t| {
-            as_variant!(t, Event::Value).and_then(as_variant!(Value::Integer(v) => *v))
+            as_variant!(t, Event::Value).and_then(as_variant!(Value::Integer(v) => v))
         })?;
         let v = v.try_into().map_err(|_| Error::IntegerRange(v))?;
         visitor.visit_u16(v)
@@ -239,7 +239,7 @@ impl<'de, 'state> de::Deserializer<'de> for &mut Deserializer<'de, 'state> {
         V: de::Visitor<'de>,
     {
         let v = self.next_with(|t| {
-            as_variant!(t, Event::Value).and_then(as_variant!(Value::Integer(v) => *v))
+            as_variant!(t, Event::Value).and_then(as_variant!(Value::Integer(v) => v))
         })?;
         let v = v.try_into().map_err(|_| Error::IntegerRange(v))?;
         visitor.visit_i32(v)
@@ -250,7 +250,7 @@ impl<'de, 'state> de::Deserializer<'de> for &mut Deserializer<'de, 'state> {
         V: de::Visitor<'de>,
     {
         let v = self.next_with(|t| {
-            as_variant!(t, Event::Value).and_then(as_variant!(Value::Integer(v) => *v))
+            as_variant!(t, Event::Value).and_then(as_variant!(Value::Integer(v) => v))
         })?;
         let v = v.try_into().map_err(|_| Error::IntegerRange(v))?;
         visitor.visit_u32(v)
@@ -261,7 +261,7 @@ impl<'de, 'state> de::Deserializer<'de> for &mut Deserializer<'de, 'state> {
         V: de::Visitor<'de>,
     {
         let v = self.next_with(|t| {
-            as_variant!(t, Event::Value).and_then(as_variant!(Value::Integer(v) => *v))
+            as_variant!(t, Event::Value).and_then(as_variant!(Value::Integer(v) => v))
         })?;
         visitor.visit_i64(v)
     }
@@ -271,7 +271,7 @@ impl<'de, 'state> de::Deserializer<'de> for &mut Deserializer<'de, 'state> {
         V: de::Visitor<'de>,
     {
         let v = self.next_with(|t| {
-            as_variant!(t, Event::Value).and_then(as_variant!(Value::Integer(v) => *v))
+            as_variant!(t, Event::Value).and_then(as_variant!(Value::Integer(v) => v))
         })?;
         let v = v.try_into().map_err(|_| Error::IntegerRange(v))?;
         visitor.visit_u64(v)
@@ -282,7 +282,7 @@ impl<'de, 'state> de::Deserializer<'de> for &mut Deserializer<'de, 'state> {
         V: de::Visitor<'de>,
     {
         let v = self.next_with(|t| {
-            as_variant!(t, Event::Value).and_then(as_variant!(Value::Integer(v) => *v))
+            as_variant!(t, Event::Value).and_then(as_variant!(Value::Integer(v) => v))
         })?;
         let v = v.try_into().map_err(|_| Error::IntegerRange(v))?;
         visitor.visit_i128(v)
@@ -293,7 +293,7 @@ impl<'de, 'state> de::Deserializer<'de> for &mut Deserializer<'de, 'state> {
         V: de::Visitor<'de>,
     {
         let v = self.next_with(|t| {
-            as_variant!(t, Event::Value).and_then(as_variant!(Value::Integer(v) => *v))
+            as_variant!(t, Event::Value).and_then(as_variant!(Value::Integer(v) => v))
         })?;
         let v = v.try_into().map_err(|_| Error::IntegerRange(v))?;
         visitor.visit_u128(v)
@@ -304,7 +304,7 @@ impl<'de, 'state> de::Deserializer<'de> for &mut Deserializer<'de, 'state> {
         V: de::Visitor<'de>,
     {
         let v = self.next_with(|t| {
-            as_variant!(t, Event::Value).and_then(as_variant!(Value::Float(v) => *v))
+            as_variant!(t, Event::Value).and_then(as_variant!(Value::Float(v) => v))
         })?;
         visitor.visit_f32(v)
     }
@@ -314,7 +314,7 @@ impl<'de, 'state> de::Deserializer<'de> for &mut Deserializer<'de, 'state> {
         V: de::Visitor<'de>,
     {
         let v = self.next_with(|t| {
-            as_variant!(t, Event::Value).and_then(as_variant!(Value::Float(v) => *v))
+            as_variant!(t, Event::Value).and_then(as_variant!(Value::Float(v) => v))
         })?;
         let v = v.try_into().map_err(|_| Error::FloatRange(v))?;
         visitor.visit_f64(v)
@@ -332,7 +332,7 @@ impl<'de, 'state> de::Deserializer<'de> for &mut Deserializer<'de, 'state> {
         V: de::Visitor<'de>,
     {
         let v = self.next_with(|t| {
-            as_variant!(t, Event::Value).and_then(as_variant!(Value::String(v) => v.clone()))
+            as_variant!(t, Event::Value).and_then(as_variant!(Value::String(v) => v))
         })?;
         visitor.visit_borrowed_str(&v)
     }
@@ -563,7 +563,7 @@ impl<'a, 'de, 'state> de::EnumAccess<'de> for Access<'a, 'de, 'state> {
     where
         T: de::DeserializeSeed<'de>,
     {
-        let name = self.de.next_with(as_variant!(Event::EnumOpen(n) => *n))?;
+        let name = self.de.next_with(as_variant!(Event::EnumOpen(n) => n))?;
         let de = de::value::BorrowedStrDeserializer::<'de, Error>::new(name);
         let val = seed.deserialize(de)?;
         self.de.immediately_after_enum_name = true;
@@ -611,7 +611,7 @@ impl<'a, 'de, 'state> de::MapAccess<'de> for Access<'a, 'de, 'state> {
     where
         K: de::DeserializeSeed<'de>,
     {
-        if let Some(name) = self.de.peek_with(as_variant!(Event::Key(n) => *n))? {
+        if let Some(name) = self.de.peek_with(as_variant!(Event::Key(n) => n))? {
             self.de.consume();
             let de = de::value::BorrowedStrDeserializer::<'de, Error>::new(name);
             seed.deserialize(de).map(Some)
