@@ -2,7 +2,7 @@ use as_variant::as_variant;
 use serde::de;
 
 use super::{Located, ParseError, Parser, ParserState};
-use crate::syntax::{Event, Integer, Value};
+use crate::syntax::{Event, Float, Integer, Value};
 use crate::Flavor;
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -15,7 +15,9 @@ pub enum Error {
     #[error("not implemented: {0}")]
     NotImplemented(&'static str),
     #[error("integer out of range: {0}")]
-    OutOfRange(Integer),
+    IntegerRange(Integer),
+    #[error("float out of range: {0}")]
+    FloatRange(Float),
 
     #[error("unknown error")]
     Unknown,
@@ -189,7 +191,7 @@ impl<'de, 'state> de::Deserializer<'de> for &mut Deserializer<'de, 'state> {
         let v = self.next_with(|t| {
             as_variant!(t, Event::Value).and_then(as_variant!(Value::Integer(v) => *v))
         })?;
-        let v = v.try_into().map_err(|_| Error::OutOfRange(v))?;
+        let v = v.try_into().map_err(|_| Error::IntegerRange(v))?;
         visitor.visit_i8(v)
     }
 
@@ -200,7 +202,7 @@ impl<'de, 'state> de::Deserializer<'de> for &mut Deserializer<'de, 'state> {
         let v = self.next_with(|t| {
             as_variant!(t, Event::Value).and_then(as_variant!(Value::Integer(v) => *v))
         })?;
-        let v = v.try_into().map_err(|_| Error::OutOfRange(v))?;
+        let v = v.try_into().map_err(|_| Error::IntegerRange(v))?;
         visitor.visit_u8(v)
     }
 
@@ -211,7 +213,7 @@ impl<'de, 'state> de::Deserializer<'de> for &mut Deserializer<'de, 'state> {
         let v = self.next_with(|t| {
             as_variant!(t, Event::Value).and_then(as_variant!(Value::Integer(v) => *v))
         })?;
-        let v = v.try_into().map_err(|_| Error::OutOfRange(v))?;
+        let v = v.try_into().map_err(|_| Error::IntegerRange(v))?;
         visitor.visit_i16(v)
     }
 
@@ -222,7 +224,7 @@ impl<'de, 'state> de::Deserializer<'de> for &mut Deserializer<'de, 'state> {
         let v = self.next_with(|t| {
             as_variant!(t, Event::Value).and_then(as_variant!(Value::Integer(v) => *v))
         })?;
-        let v = v.try_into().map_err(|_| Error::OutOfRange(v))?;
+        let v = v.try_into().map_err(|_| Error::IntegerRange(v))?;
         visitor.visit_u16(v)
     }
 
@@ -233,7 +235,7 @@ impl<'de, 'state> de::Deserializer<'de> for &mut Deserializer<'de, 'state> {
         let v = self.next_with(|t| {
             as_variant!(t, Event::Value).and_then(as_variant!(Value::Integer(v) => *v))
         })?;
-        let v = v.try_into().map_err(|_| Error::OutOfRange(v))?;
+        let v = v.try_into().map_err(|_| Error::IntegerRange(v))?;
         visitor.visit_i32(v)
     }
 
@@ -244,7 +246,7 @@ impl<'de, 'state> de::Deserializer<'de> for &mut Deserializer<'de, 'state> {
         let v = self.next_with(|t| {
             as_variant!(t, Event::Value).and_then(as_variant!(Value::Integer(v) => *v))
         })?;
-        let v = v.try_into().map_err(|_| Error::OutOfRange(v))?;
+        let v = v.try_into().map_err(|_| Error::IntegerRange(v))?;
         visitor.visit_u32(v)
     }
 
@@ -265,22 +267,30 @@ impl<'de, 'state> de::Deserializer<'de> for &mut Deserializer<'de, 'state> {
         let v = self.next_with(|t| {
             as_variant!(t, Event::Value).and_then(as_variant!(Value::Integer(v) => *v))
         })?;
-        let v = v.try_into().map_err(|_| Error::OutOfRange(v))?;
+        let v = v.try_into().map_err(|_| Error::IntegerRange(v))?;
         visitor.visit_u64(v)
     }
 
-    fn deserialize_i128<V>(self, _visitor: V) -> Result<V::Value, Self::Error>
+    fn deserialize_i128<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: de::Visitor<'de>,
     {
-        Err(Error::NotImplemented("i128"))
+        let v = self.next_with(|t| {
+            as_variant!(t, Event::Value).and_then(as_variant!(Value::Integer(v) => *v))
+        })?;
+        let v = v.try_into().map_err(|_| Error::IntegerRange(v))?;
+        visitor.visit_i128(v)
     }
 
-    fn deserialize_u128<V>(self, _visitor: V) -> Result<V::Value, Self::Error>
+    fn deserialize_u128<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: de::Visitor<'de>,
     {
-        Err(Error::NotImplemented("u128"))
+        let v = self.next_with(|t| {
+            as_variant!(t, Event::Value).and_then(as_variant!(Value::Integer(v) => *v))
+        })?;
+        let v = v.try_into().map_err(|_| Error::IntegerRange(v))?;
+        visitor.visit_u128(v)
     }
 
     fn deserialize_f32<V>(self, visitor: V) -> Result<V::Value, Self::Error>
@@ -293,11 +303,15 @@ impl<'de, 'state> de::Deserializer<'de> for &mut Deserializer<'de, 'state> {
         visitor.visit_f32(v)
     }
 
-    fn deserialize_f64<V>(self, _visitor: V) -> Result<V::Value, Self::Error>
+    fn deserialize_f64<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: de::Visitor<'de>,
     {
-        Err(Error::NotImplemented("f64"))
+        let v = self.next_with(|t| {
+            as_variant!(t, Event::Value).and_then(as_variant!(Value::Float(v) => *v))
+        })?;
+        let v = v.try_into().map_err(|_| Error::FloatRange(v))?;
+        visitor.visit_f64(v)
     }
 
     fn deserialize_char<V>(self, _visitor: V) -> Result<V::Value, Self::Error>
