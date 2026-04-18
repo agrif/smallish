@@ -1,5 +1,6 @@
 use nom::{
-    branch, bytes, character::complete as character, combinator, error, multi, sequence, Parser,
+    branch, bytes::complete as bytes, character::complete as character, combinator, error, multi,
+    sequence, Parser,
 };
 
 use super::{LocResult, Located};
