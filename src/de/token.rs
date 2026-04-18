@@ -5,6 +5,7 @@ use nom::{
 
 use super::{LocResult, Located};
 use crate::syntax::{Integer, Token, Value};
+use crate::types::EscapedStr;
 
 #[derive(Clone, Debug, thiserror::Error)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
@@ -19,9 +20,9 @@ pub enum TokenError {
 
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-struct NomError<I> {
+pub(crate) struct NomError<I> {
     input: I,
-    error: TokenError,
+    pub(crate) error: TokenError,
 }
 
 impl<I> NomError<I> {
@@ -269,7 +270,7 @@ impl<'de> Tokenizer<'de> {
         .map_err(|e| e.map(|e: NomError<_>| e.replace(TokenError::UnknownEscape)))
     }
 
-    fn string_chunk<'a>(input: &'a str) -> IResult<&'a str, ()> {
+    pub(crate) fn string_chunk<'a>(input: &'a str) -> IResult<&'a str, ()> {
         branch::alt((
             Self::string_plain,
             sequence::preceded(character::char('\\'), combinator::cut(Self::string_escape)),
@@ -283,7 +284,7 @@ impl<'de> Tokenizer<'de> {
             combinator::recognize(multi::many0_count(Self::string_chunk)),
             character::char('"'),
         )
-        .map(|s| Token::Value(Value::String(s)))
+        .map(|s| Token::Value(Value::String(EscapedStr::new_unchecked(s))))
         .parse(input)
     }
 

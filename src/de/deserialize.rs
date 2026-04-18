@@ -332,9 +332,9 @@ impl<'de, 'state> de::Deserializer<'de> for &mut Deserializer<'de, 'state> {
         V: de::Visitor<'de>,
     {
         let v = self.next_with(|t| {
-            as_variant!(t, Event::Value).and_then(as_variant!(Value::String(v) => *v))
+            as_variant!(t, Event::Value).and_then(as_variant!(Value::String(v) => v.clone()))
         })?;
-        visitor.visit_borrowed_str(v)
+        visitor.visit_borrowed_str(&v)
     }
 
     fn deserialize_string<V>(self, visitor: V) -> Result<V::Value, Self::Error>

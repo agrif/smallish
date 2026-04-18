@@ -9,6 +9,7 @@ mod macros;
 
 pub mod de;
 pub mod syntax;
+pub mod types;
 
 #[derive(Clone, Copy, Debug, Default)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
