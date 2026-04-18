@@ -55,6 +55,7 @@ Go dir=(Turnwise 2)
 Go dir=null opts={sub={flag=true}}
 SetOptions foo={flag=false} bar="bar" madeup={this=2}
 SetOptions bar="hello\nworld"
+NewtypeTuple [0, 1] '\u{1f914}'
 NewtypeTuple [0, 1] '🤔'
 "#;
 

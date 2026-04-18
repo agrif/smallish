@@ -295,7 +295,34 @@ impl<'de> Tokenizer<'de> {
             character::char('0').map(|_| '\0'),
             character::char('"').map(|_| '"'),
             character::char('\'').map(|_| '\''),
-            // todo: \xNN, \u{NNNN}
+            // \x7f
+            sequence::preceded(
+                character::char('x'),
+                combinator::recognize((
+                    character::satisfy(|c| c >= '0' && c <= '7'),
+                    character::satisfy(|c| c.is_ascii_hexdigit()),
+                ))
+                .map_opt(|v| {
+                    // safety: this escape only recognizes valid ascii
+                    // and only up to 7f
+                    unsafe {
+                        let v = core::str::from_utf8_unchecked(v);
+                        let v = u32::from_str_radix(v, 16).ok()?;
+                        Some(char::from_u32_unchecked(v))
+                    }
+                }),
+            ),
+            // \u{ffffff}
+            sequence::delimited(
+                bytes::tag("u{"),
+                bytes::take_while_m_n(1, 6, |c: u8| c.is_ascii_hexdigit()).map_opt(|v| {
+                    // safety: this escape only recognizes valid ascii
+                    let v = unsafe { core::str::from_utf8_unchecked(v) };
+                    let v = u32::from_str_radix(v, 16).ok()?;
+                    char::from_u32(v)
+                }),
+                character::char('}'),
+            ),
         ))
         .parse(input)
     }
@@ -310,7 +337,7 @@ impl<'de> Tokenizer<'de> {
     pub(crate) fn string_chunk<'a>(input: &'a [u8]) -> IResult<&'a [u8], SliceChunk<&'a str>> {
         branch::alt((
             Self::string_plain,
-            sequence::preceded(character::char('\\'), Self::string_escape),
+            sequence::preceded(character::char('\\'), combinator::cut(Self::string_escape)),
         ))
         .parse(input)
     }
