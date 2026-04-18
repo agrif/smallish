@@ -337,11 +337,14 @@ where
         visitor.visit_f64(v)
     }
 
-    fn deserialize_char<V>(self, _visitor: V) -> Result<V::Value, Self::Error>
+    fn deserialize_char<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: de::Visitor<'de>,
     {
-        Err(Error::NotImplemented("char"))
+        let v = self.next_with(|t| {
+            as_variant!(t, Event::Value).and_then(as_variant!(Value::Character(v) => v))
+        })?;
+        visitor.visit_char(v)
     }
 
     fn deserialize_str<V>(self, visitor: V) -> Result<V::Value, Self::Error>

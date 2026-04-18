@@ -11,7 +11,7 @@ enum Instruction<'a> {
     Vec(u8, u8, u8),
     #[serde(borrow)]
     SetOptions(Options<'a>),
-    NewtypeTuple(((u8, u8), u8)),
+    NewtypeTuple(((u8, u8), char)),
     Nop,
 }
 
@@ -55,7 +55,7 @@ Go dir=(Turnwise 2)
 Go dir=null opts={sub={flag=true}}
 SetOptions foo={flag=false} bar="bar" madeup={this=2}
 SetOptions bar="hello\nworld"
-NewtypeTuple [0, 1] 2
+NewtypeTuple [0, 1] '🤔'
 "#;
 
 fn main() {
