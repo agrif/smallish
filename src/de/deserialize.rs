@@ -498,7 +498,7 @@ impl<'a, 'de, 'state> de::SeqAccess<'de> for Access<'a, 'de, 'state> {
     {
         if self
             .de
-            .peek_with(as_variant!(Event::ListClose => ()))?
+            .peek_with(as_variant!(Event::ListClose | Event::EnumClose => ()))?
             .is_some()
         {
             Ok(None)
@@ -541,7 +541,15 @@ impl<'a, 'de, 'state> de::VariantAccess<'de> for Access<'a, 'de, 'state> {
     where
         V: de::Visitor<'de>,
     {
-        de::Deserializer::deserialize_seq(&mut *self.de, visitor)
+        if self
+            .de
+            .peek_with(as_variant!(Event::ListOpen => ()))?
+            .is_some()
+        {
+            de::Deserializer::deserialize_seq(&mut *self.de, visitor)
+        } else {
+            visitor.visit_seq(self)
+        }
     }
 
     fn struct_variant<V>(
@@ -552,7 +560,15 @@ impl<'a, 'de, 'state> de::VariantAccess<'de> for Access<'a, 'de, 'state> {
     where
         V: de::Visitor<'de>,
     {
-        visitor.visit_map(self)
+        if self
+            .de
+            .peek_with(as_variant!(Event::MapOpen => ()))?
+            .is_some()
+        {
+            de::Deserializer::deserialize_map(&mut *self.de, visitor)
+        } else {
+            visitor.visit_map(self)
+        }
     }
 }
 

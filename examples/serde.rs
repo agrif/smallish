@@ -34,7 +34,8 @@ Nop
 Wait 1000
 Draw true
 Vec [0, 1, 2]
-Go dir=North
+Vec 0 1 2
+Go {dir=North}
 Go dir=null
 SetOptions {foo=2, bar="bar"}
 SetOptions {bar="hello\nworld"}
