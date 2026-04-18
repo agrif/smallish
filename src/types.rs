@@ -1,3 +1,3 @@
-mod str;
+mod escaped;
 
-pub use str::{EscapedStr, UnescapeError};
+pub use escaped::{EscapedStr, UnescapeError};
