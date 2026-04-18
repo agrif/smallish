@@ -1,7 +1,7 @@
 use smallish::de;
 
 static SOURCE: &str = r#"
-some_enum a=bbb 25 4.0e2
+some_enum a=bbb 25 4.0e2 [[0, 1], 2]
 bar {baz = "hello\nworld"}
 "#;
 

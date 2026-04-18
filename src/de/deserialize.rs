@@ -86,6 +86,7 @@ pub struct Deserializer<'de, 'state> {
     parser: Parser<'de, 'state>,
     peeked: Option<Event<'de>>,
     location: Located<'de, ()>,
+    immediately_after_enum_name: bool,
 }
 
 impl<'de, 'state> Deserializer<'de, 'state> {
@@ -94,6 +95,7 @@ impl<'de, 'state> Deserializer<'de, 'state> {
             location: parser.location().clone(),
             parser: parser,
             peeked: None,
+            immediately_after_enum_name: false,
         }
     }
 
@@ -122,6 +124,7 @@ impl<'de, 'state> Deserializer<'de, 'state> {
 
     fn next(&mut self) -> Result<Event<'de>, Error> {
         if let Some(ev) = self.peeked.take() {
+            self.immediately_after_enum_name = false;
             return Ok(ev);
         }
 
@@ -129,7 +132,9 @@ impl<'de, 'state> Deserializer<'de, 'state> {
         let (loc, ev) = Located::from_result(next).split();
         self.location = loc;
 
-        Ok(ev?)
+        let ev = ev?;
+        self.immediately_after_enum_name = false;
+        Ok(ev)
     }
 
     fn peek(&mut self) -> Result<Event<'de>, Error> {
@@ -160,6 +165,7 @@ impl<'de, 'state> Deserializer<'de, 'state> {
     }
 
     fn consume(&mut self) {
+        self.immediately_after_enum_name = false;
         self.peeked = None;
     }
 }
@@ -401,10 +407,15 @@ impl<'de, 'state> de::Deserializer<'de> for &mut Deserializer<'de, 'state> {
     where
         V: de::Visitor<'de>,
     {
-        self.next_with(as_variant!(Event::ListOpen => ()))?;
-        let v = visitor.visit_seq(Access::new(self))?;
-        self.next_with(as_variant!(Event::ListClose => ()))?;
-        Ok(v)
+        if self.immediately_after_enum_name {
+            self.immediately_after_enum_name = false;
+            visitor.visit_seq(Access::new(self))
+        } else {
+            self.next_with(as_variant!(Event::ListOpen => ()))?;
+            let v = visitor.visit_seq(Access::new(self))?;
+            self.next_with(as_variant!(Event::ListClose => ()))?;
+            Ok(v)
+        }
     }
 
     fn deserialize_tuple<V>(self, _len: usize, visitor: V) -> Result<V::Value, Self::Error>
@@ -430,10 +441,15 @@ impl<'de, 'state> de::Deserializer<'de> for &mut Deserializer<'de, 'state> {
     where
         V: de::Visitor<'de>,
     {
-        self.next_with(as_variant!(Event::MapOpen => ()))?;
-        let v = visitor.visit_map(Access::new(self))?;
-        self.next_with(as_variant!(Event::MapClose => ()))?;
-        Ok(v)
+        if self.immediately_after_enum_name {
+            self.immediately_after_enum_name = false;
+            visitor.visit_map(Access::new(self))
+        } else {
+            self.next_with(as_variant!(Event::MapOpen => ()))?;
+            let v = visitor.visit_map(Access::new(self))?;
+            self.next_with(as_variant!(Event::MapClose => ()))?;
+            Ok(v)
+        }
     }
 
     fn deserialize_struct<V>(
@@ -519,6 +535,7 @@ impl<'a, 'de, 'state> de::EnumAccess<'de> for Access<'a, 'de, 'state> {
         let name = self.de.next_with(as_variant!(Event::EnumOpen(n) => *n))?;
         let de = de::value::BorrowedStrDeserializer::<'de, Error>::new(name);
         let val = seed.deserialize(de)?;
+        self.de.immediately_after_enum_name = true;
         Ok((val, self))
     }
 }
@@ -541,15 +558,7 @@ impl<'a, 'de, 'state> de::VariantAccess<'de> for Access<'a, 'de, 'state> {
     where
         V: de::Visitor<'de>,
     {
-        if self
-            .de
-            .peek_with(as_variant!(Event::ListOpen => ()))?
-            .is_some()
-        {
-            de::Deserializer::deserialize_seq(&mut *self.de, visitor)
-        } else {
-            visitor.visit_seq(self)
-        }
+        visitor.visit_seq(self)
     }
 
     fn struct_variant<V>(
@@ -560,15 +569,7 @@ impl<'a, 'de, 'state> de::VariantAccess<'de> for Access<'a, 'de, 'state> {
     where
         V: de::Visitor<'de>,
     {
-        if self
-            .de
-            .peek_with(as_variant!(Event::MapOpen => ()))?
-            .is_some()
-        {
-            de::Deserializer::deserialize_map(&mut *self.de, visitor)
-        } else {
-            visitor.visit_map(self)
-        }
+        visitor.visit_map(self)
     }
 }
 
