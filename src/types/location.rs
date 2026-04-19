@@ -23,15 +23,26 @@ impl Located<'static, ()> {
 }
 
 impl<'de, T> Located<'de, T> {
-    pub fn with_source<'a>(self, source: Option<&'a [u8]>) -> Located<'a, T> {
-        Located { source, ..self }
+    pub fn source_line(&self) -> Option<&'de str> {
+        self.source_line_bytes()
+            .and_then(|s| core::str::from_utf8(s).ok())
     }
 
-    pub fn without_source(self) -> Located<'static, T> {
-        Located {
-            source: None,
-            ..self
-        }
+    pub fn source_line_bytes(&self) -> Option<&'de [u8]> {
+        let source = self.source?;
+        let start = source
+            .get(..self.offset)?
+            .iter()
+            .rposition(|c| *c == b'\n')
+            .map(|i| i + 1)
+            .unwrap_or(0);
+        let end = source
+            .get(self.offset..)?
+            .iter()
+            .position(|c| *c == b'\n')
+            .map(|i| self.offset + i)
+            .unwrap_or(source.len());
+        Some(&source[start..end])
     }
 
     pub(crate) fn advance(&mut self, start: &'de [u8], end: &'de [u8]) {
@@ -67,20 +78,6 @@ impl<'de, T> Located<'de, T> {
         }
     }
 
-    pub fn pure(&self) -> Located<'de, ()> {
-        self.wrap(())
-    }
-
-    pub fn map<U>(self, f: impl FnOnce(T) -> U) -> Located<'de, U> {
-        Located {
-            source: self.source,
-            line: self.line,
-            column: self.column,
-            offset: self.offset,
-            value: f(self.value),
-        }
-    }
-
     pub fn replace<U>(self, value: U) -> Located<'de, U> {
         self.map(|_| value)
     }
@@ -98,19 +95,25 @@ impl<'de, T> Located<'de, T> {
         )
     }
 
-    pub fn source_line(&self) -> Option<&'de [u8]> {
-        let source = self.source?;
-        let start = source[..self.offset]
-            .iter()
-            .rposition(|c| *c == b'\n')
-            .map(|i| i + 1)
-            .unwrap_or(0);
-        let end = source[self.offset..]
-            .iter()
-            .position(|c| *c == b'\n')
-            .map(|i| self.offset + i)
-            .unwrap_or(source.len());
-        Some(&source[start..end])
+    pub fn map<U>(self, f: impl FnOnce(T) -> U) -> Located<'de, U> {
+        Located {
+            source: self.source,
+            line: self.line,
+            column: self.column,
+            offset: self.offset,
+            value: f(self.value),
+        }
+    }
+
+    pub fn with_source<'a>(self, source: Option<&'a [u8]>) -> Located<'a, T> {
+        Located { source, ..self }
+    }
+
+    pub fn without_source(self) -> Located<'static, T> {
+        Located {
+            source: None,
+            ..self
+        }
     }
 }
 
@@ -170,10 +173,7 @@ where
             "at source location {}:{}, {}",
             self.line, self.column, self.value
         )?;
-        if let Some(line) = self
-            .source_line()
-            .and_then(|s| core::str::from_utf8(s).ok())
-        {
+        if let Some(line) = self.source_line() {
             writeln!(f, "  | {}", line)?;
             writeln!(f, "    {: <1$}^", "", self.column)?;
         }
