@@ -113,6 +113,12 @@ impl de::Error for Error {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+enum Flag {
+    NewtypeEnum,
+}
+
 #[derive(Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Deserializer<'de, S> {
@@ -120,7 +126,7 @@ pub struct Deserializer<'de, S> {
     peeked: Option<Event<'de>>,
     location: Located<'de, ()>,
     unescape: &'de mut [u8],
-    immediately_after_enum_name: bool,
+    flag: Option<Flag>,
 }
 
 impl<'de, S> Deserializer<'de, S>
@@ -133,7 +139,7 @@ where
             parser: parser,
             peeked: None,
             unescape,
-            immediately_after_enum_name: false,
+            flag: None,
         }
     }
 
@@ -159,7 +165,7 @@ where
 
     fn next(&mut self) -> Result<Event<'de>, Error> {
         if let Some(ev) = self.peeked.take() {
-            self.immediately_after_enum_name = false;
+            self.flag = None;
             return Ok(ev);
         }
 
@@ -168,7 +174,7 @@ where
         self.location = loc;
 
         let ev = ev?;
-        self.immediately_after_enum_name = false;
+        self.flag = None;
         Ok(ev)
     }
 
@@ -200,7 +206,7 @@ where
     }
 
     fn consume(&mut self) {
-        self.immediately_after_enum_name = false;
+        self.flag = None;
         self.peeked = None;
     }
 }
@@ -215,12 +221,14 @@ where
     where
         V: de::Visitor<'de>,
     {
-        if self.immediately_after_enum_name {
+        if let Some(Flag::NewtypeEnum) = self.flag {
             return match self.peek()? {
                 Event::Key(_) => self.deserialize_map(visitor),
                 _ => self.deserialize_seq(visitor),
             };
         }
+
+        self.flag = None;
 
         match self.peek()? {
             Event::ListOpen => self.deserialize_seq(visitor),
@@ -490,8 +498,8 @@ where
     where
         V: de::Visitor<'de>,
     {
-        if self.immediately_after_enum_name {
-            self.immediately_after_enum_name = false;
+        if let Some(Flag::NewtypeEnum) = self.flag {
+            self.flag = None;
             visitor.visit_seq(Access::new(self))
         } else {
             self.next_with(as_variant!(Event::ListOpen => ()))?;
@@ -524,8 +532,8 @@ where
     where
         V: de::Visitor<'de>,
     {
-        if self.immediately_after_enum_name {
-            self.immediately_after_enum_name = false;
+        if let Some(Flag::NewtypeEnum) = self.flag {
+            self.flag = None;
             visitor.visit_map(Access::new(self))
         } else {
             self.next_with(as_variant!(Event::MapOpen => ()))?;
@@ -676,7 +684,7 @@ where
     where
         T: de::DeserializeSeed<'de>,
     {
-        self.de.immediately_after_enum_name = true;
+        self.de.flag = Some(Flag::NewtypeEnum);
         seed.deserialize(&mut *self.de)
     }
 
