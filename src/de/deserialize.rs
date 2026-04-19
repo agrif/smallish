@@ -117,7 +117,6 @@ impl de::Error for Error {
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 enum Flag {
     NewtypeEnum,
-    Escaped,
 }
 
 #[derive(Debug)]
@@ -404,18 +403,11 @@ where
     where
         V: de::Visitor<'de>,
     {
-        let escaped = if let Some(Flag::Escaped) = self.flag {
-            self.flag = None;
-            true
-        } else {
-            false
-        };
-
         let v = self.next_with(|t| {
             as_variant!(t, Event::Value).and_then(as_variant!(Value::String(v) => v))
         })?;
 
-        if escaped || !v.has_escapes() {
+        if !v.has_escapes() {
             visitor.visit_borrowed_str(*v)
         } else {
             let unescape = core::mem::replace(&mut self.unescape, &mut []);
@@ -436,18 +428,11 @@ where
     where
         V: de::Visitor<'de>,
     {
-        let escaped = if let Some(Flag::Escaped) = self.flag {
-            self.flag = None;
-            true
-        } else {
-            false
-        };
-
         let v = self.next_with(|t| {
             as_variant!(t, Event::Value).and_then(as_variant!(Value::Bytes(v) => v))
         })?;
 
-        if escaped || !v.has_escapes() {
+        if !v.has_escapes() {
             visitor.visit_borrowed_bytes(*v)
         } else {
             let unescape = core::mem::replace(&mut self.unescape, &mut []);
@@ -507,9 +492,10 @@ where
         V: de::Visitor<'de>,
     {
         if name == Escaped::<()>::SERDE_NAME {
-            self.flag = Some(Flag::Escaped);
+            visitor.visit_newtype_struct(&mut EscapedAccess::new(self))
+        } else {
+            visitor.visit_newtype_struct(self)
         }
-        visitor.visit_newtype_struct(self)
     }
 
     fn deserialize_seq<V>(self, visitor: V) -> Result<V::Value, Self::Error>
@@ -753,6 +739,73 @@ where
         V: de::DeserializeSeed<'de>,
     {
         seed.deserialize(&mut *self.de)
+    }
+}
+
+#[derive(Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+struct EscapedAccess<'a, 'de: 'a, S> {
+    de: &'a mut Deserializer<'de, S>,
+}
+
+impl<'a, 'de, S> EscapedAccess<'a, 'de, S> {
+    fn new(de: &'a mut Deserializer<'de, S>) -> Self {
+        Self { de }
+    }
+}
+
+impl<'a, 'b, 'de, S> de::Deserializer<'de> for &'a mut EscapedAccess<'b, 'de, S>
+where
+    S: AsRef<[ParserState]> + AsMut<[ParserState]>,
+{
+    type Error = Error;
+
+    fn deserialize_any<V>(self, _visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: de::Visitor<'de>,
+    {
+        self.de.next()?;
+        Err(Error::InvalidType)
+    }
+
+    serde::forward_to_deserialize_any! {
+        bool i8 i16 i32 i64 i128 u8 u16 u32 u64 u128 f32 f64 char
+        option unit unit_struct newtype_struct seq tuple
+        tuple_struct map struct enum identifier ignored_any
+    }
+
+    fn deserialize_str<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: de::Visitor<'de>,
+    {
+        let v = self.de.next_with(|t| {
+            as_variant!(t, Event::Value).and_then(as_variant!(Value::String(v) => v))
+        })?;
+        visitor.visit_borrowed_str(*v)
+    }
+
+    fn deserialize_string<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: de::Visitor<'de>,
+    {
+        self.deserialize_str(visitor)
+    }
+
+    fn deserialize_bytes<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: de::Visitor<'de>,
+    {
+        let v = self.de.next_with(|t| {
+            as_variant!(t, Event::Value).and_then(as_variant!(Value::Bytes(v) => v))
+        })?;
+        visitor.visit_borrowed_bytes(*v)
+    }
+
+    fn deserialize_byte_buf<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: de::Visitor<'de>,
+    {
+        self.deserialize_bytes(visitor)
     }
 }
 
