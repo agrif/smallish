@@ -29,24 +29,19 @@ pub enum EscapedFragment<Slice, Item> {
     Item(Item),
 }
 
-trait Stringlike<Slice: ?Sized>: Borrow<Slice>
-where
-    for<'a> &'a Slice: nom::Input,
-{
-    fn chunk<'a>(
-        input: &'a [u8],
-    ) -> IResult<&'a [u8], EscapedFragment<&'a Slice, <&'a Slice as nom::Input>::Item>>;
+trait Stringlike<Slice: ?Sized, Item>: Borrow<Slice> {
+    fn chunk<'a>(input: &'a [u8]) -> IResult<&'a [u8], EscapedFragment<&'a Slice, Item>>;
 
     fn as_bytes(slice: &Slice) -> &[u8];
 
-    fn item_len(item: <&Slice as nom::Input>::Item) -> usize;
+    fn item_len(item: Item) -> usize;
 
-    fn item_write(item: <&Slice as nom::Input>::Item, buf: &mut [u8]);
+    fn item_write(item: Item, buf: &mut [u8]);
 
     fn finalize(slice: &[u8]) -> &Slice;
 }
 
-impl<T> Stringlike<str> for T
+impl<T> Stringlike<str, char> for T
 where
     T: Borrow<str>,
 {
@@ -73,7 +68,7 @@ where
     }
 }
 
-impl<T> Stringlike<[u8]> for T
+impl<T> Stringlike<[u8], u8> for T
 where
     T: Borrow<[u8]>,
 {
@@ -149,11 +144,10 @@ impl<T> Escaped<T> {
         self.0
     }
 
-    fn impl_check<B>(&self) -> Result<(), TokenError>
+    fn impl_check<B, I>(&self) -> Result<(), TokenError>
     where
-        T: Stringlike<B>,
+        T: Stringlike<B, I>,
         B: ?Sized,
-        for<'a> &'a B: nom::Input,
     {
         let input = T::as_bytes(self.0.borrow());
         match combinator::recognize(multi::many0_count(T::chunk)).parse(input) {
@@ -164,11 +158,10 @@ impl<T> Escaped<T> {
         }
     }
 
-    fn impl_has_escapes<B>(&self) -> bool
+    fn impl_has_escapes<B, I>(&self) -> bool
     where
-        T: Stringlike<B>,
+        T: Stringlike<B, I>,
         B: ?Sized,
-        for<'a> &'a B: nom::Input,
     {
         !matches!(
             T::chunk.parse(T::as_bytes(self.0.borrow())),
@@ -182,9 +175,8 @@ impl<T> Escaped<T> {
         buffer: &'buf mut [u8],
     ) -> Result<(&'buf mut [u8], &'buf B), UnescapeError>
     where
-        T: Stringlike<B>,
+        T: Stringlike<B, I>,
         B: ?Sized,
-        for<'a> &'a B: nom::Input<Item = I>,
         I: Copy,
     {
         let mut input = T::as_bytes(self.0.borrow());
