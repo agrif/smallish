@@ -22,8 +22,8 @@ pub enum Error {
     #[error("unescape buffer full")]
     BufferFull,
 
-    #[error("unknown error")]
-    Unknown,
+    #[error("serde custom error")]
+    Custom,
     #[error("invalid type")]
     InvalidType,
     #[error("invalid value")]
@@ -60,7 +60,7 @@ impl de::Error for Error {
     where
         T: core::fmt::Display,
     {
-        Self::Unknown
+        Self::Custom
     }
 
     fn invalid_type(_unexp: de::Unexpected<'_>, _exp: &dyn de::Expected) -> Self {
@@ -190,11 +190,34 @@ where
 {
     type Error = Error;
 
-    fn deserialize_any<V>(self, _visitor: V) -> Result<V::Value, Self::Error>
+    fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: de::Visitor<'de>,
     {
-        Err(Error::NotImplemented("any"))
+        if self.immediately_after_enum_name {
+            return match self.peek()? {
+                Event::Key(_) => self.deserialize_map(visitor),
+                _ => self.deserialize_seq(visitor),
+            };
+        }
+
+        match self.peek()? {
+            Event::ListOpen => self.deserialize_seq(visitor),
+            Event::MapOpen => self.deserialize_map(visitor),
+            Event::EnumOpen(_) => self.deserialize_enum("", &[], visitor),
+            Event::Value(v) => match v {
+                Value::Null => self.deserialize_unit(visitor),
+                Value::Bool(_) => self.deserialize_bool(visitor),
+                Value::Integer(_) => self.deserialize_i64(visitor),
+                Value::Float(_) => self.deserialize_f32(visitor),
+                Value::Character(_) => self.deserialize_char(visitor),
+                Value::String(_) => self.deserialize_str(visitor),
+                Value::Bytes(_) => self.deserialize_bytes(visitor),
+            },
+            Event::ListClose | Event::MapClose | Event::EnumClose | Event::Key(_) => {
+                Err(Error::InvalidType)
+            }
+        }
     }
 
     fn deserialize_bool<V>(self, visitor: V) -> Result<V::Value, Self::Error>
@@ -517,11 +540,14 @@ where
         Ok(v)
     }
 
-    fn deserialize_identifier<V>(self, _visitor: V) -> Result<V::Value, Self::Error>
+    fn deserialize_identifier<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: de::Visitor<'de>,
     {
-        Err(Error::NotImplemented("identifier"))
+        // only internally tagged enums seem to use this, and
+        // those can't read enums themselves (only strings), so
+        // the most consistent choice here is "only ever strings"
+        self.deserialize_str(visitor)
     }
 
     fn deserialize_ignored_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>
@@ -611,7 +637,6 @@ where
         let name = self.de.next_with(as_variant!(Event::EnumOpen(n) => n))?;
         let de = de::value::BorrowedStrDeserializer::<'de, Error>::new(name);
         let val = seed.deserialize(de)?;
-        self.de.immediately_after_enum_name = true;
         Ok((val, self))
     }
 }
@@ -630,6 +655,7 @@ where
     where
         T: de::DeserializeSeed<'de>,
     {
+        self.de.immediately_after_enum_name = true;
         seed.deserialize(&mut *self.de)
     }
 
