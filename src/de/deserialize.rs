@@ -563,13 +563,17 @@ where
 
     fn deserialize_struct<V>(
         self,
-        _name: &'static str,
+        name: &'static str,
         _fields: &'static [&'static str],
         visitor: V,
     ) -> Result<V::Value, Self::Error>
     where
         V: de::Visitor<'de>,
     {
+        if name == Located::SERDE_NAME {
+            return visitor.visit_map(LocatedAccess::new(self));
+        }
+
         self.deserialize_map(visitor)
     }
 
@@ -749,5 +753,149 @@ where
         V: de::DeserializeSeed<'de>,
     {
         seed.deserialize(&mut *self.de)
+    }
+}
+
+#[derive(Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+struct LocatedAccess<'a, 'de: 'a, S> {
+    location: Located<'de, ()>,
+    de: &'a mut Deserializer<'de, S>,
+    state: LocatedState,
+}
+
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+enum LocatedState {
+    Source,
+    Line,
+    Column,
+    Offset,
+    Value,
+    End,
+}
+
+impl<'a, 'de, S> LocatedAccess<'a, 'de, S>
+where
+    S: AsRef<[ParserState]> + AsMut<[ParserState]>,
+{
+    fn new(de: &'a mut Deserializer<'de, S>) -> Self {
+        Self {
+            location: *de.parser.location(),
+            de,
+            state: LocatedState::Source,
+        }
+    }
+}
+
+impl<'a, 'b, 'de, S> de::Deserializer<'de> for &'a mut LocatedAccess<'b, 'de, S>
+where
+    S: AsRef<[ParserState]> + AsMut<[ParserState]>,
+{
+    type Error = Error;
+
+    fn deserialize_any<V>(self, _visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: de::Visitor<'de>,
+    {
+        self.de.next()?;
+        Err(Error::InvalidType)
+    }
+
+    serde::forward_to_deserialize_any! {
+        bool i8 i16 i32 i64 i128 u8 u16 u32 u64 u128 f32 f64 char str string
+        unit unit_struct newtype_struct seq tuple
+        tuple_struct map struct enum identifier ignored_any
+    }
+
+    fn deserialize_bytes<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: de::Visitor<'de>,
+    {
+        if let Some(src) = self.location.source {
+            visitor.visit_borrowed_bytes(src)
+        } else {
+            self.de.next()?;
+            Err(Error::InvalidType)
+        }
+    }
+
+    fn deserialize_byte_buf<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: de::Visitor<'de>,
+    {
+        self.deserialize_bytes(visitor)
+    }
+
+    fn deserialize_option<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: de::Visitor<'de>,
+    {
+        // only called on Option<&'de [u8]> for source
+        if let Some(_) = self.location.source {
+            visitor.visit_some(self)
+        } else {
+            visitor.visit_none()
+        }
+    }
+}
+
+impl<'a, 'de, S> de::MapAccess<'de> for LocatedAccess<'a, 'de, S>
+where
+    S: AsRef<[ParserState]> + AsMut<[ParserState]>,
+{
+    type Error = Error;
+
+    fn next_key_seed<K>(&mut self, seed: K) -> Result<Option<K::Value>, Self::Error>
+    where
+        K: de::DeserializeSeed<'de>,
+    {
+        let key = match self.state {
+            LocatedState::Source => "source",
+            LocatedState::Line => "line",
+            LocatedState::Column => "column",
+            LocatedState::Offset => "offset",
+            LocatedState::Value => "value",
+            LocatedState::End => {
+                return Ok(None);
+            }
+        };
+
+        let de = de::value::BorrowedStrDeserializer::new(key);
+        seed.deserialize(de).map(Some)
+    }
+
+    fn next_value_seed<V>(&mut self, seed: V) -> Result<V::Value, Self::Error>
+    where
+        V: de::DeserializeSeed<'de>,
+    {
+        match self.state {
+            LocatedState::Source => {
+                self.state = LocatedState::Line;
+                seed.deserialize(self)
+            }
+            LocatedState::Line => {
+                self.state = LocatedState::Column;
+                let de = de::value::UsizeDeserializer::new(self.location.line);
+                seed.deserialize(de)
+            }
+            LocatedState::Column => {
+                self.state = LocatedState::Offset;
+                let de = de::value::UsizeDeserializer::new(self.location.column);
+                seed.deserialize(de)
+            }
+            LocatedState::Offset => {
+                self.state = LocatedState::Value;
+                let de = de::value::UsizeDeserializer::new(self.location.offset);
+                seed.deserialize(de)
+            }
+            LocatedState::Value => {
+                self.state = LocatedState::End;
+                seed.deserialize(&mut *self.de)
+            }
+            LocatedState::End => {
+                unreachable!();
+            }
+        }
     }
 }

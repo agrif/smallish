@@ -10,8 +10,8 @@ enum Instruction<'a> {
     Draw(bool),
     Vec(u8, u8, u8),
     #[serde(borrow)]
-    SetOptions(Options<'a>),
-    NewtypeTuple(((u8, u8), char)),
+    SetOptions(smallish::types::Located<'a, Options<'a>>),
+    NewtypeTuple(((u8, u8), smallish::types::Located<'a, char>)),
     Nop,
 }
 

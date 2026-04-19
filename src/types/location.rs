@@ -2,8 +2,9 @@ pub type LocResult<'de, T, E> = Result<Located<'de, T>, Located<'de, E>>;
 
 #[derive(Clone, Copy, serde::Deserialize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct Located<'de, T> {
-    pub source: Option<&'de [u8]>,
+#[serde(rename = "__smallish_magic_located__")]
+pub struct Located<'a, T> {
+    pub source: Option<&'a [u8]>,
     pub line: usize,
     pub column: usize,
     pub offset: usize,
@@ -11,6 +12,8 @@ pub struct Located<'de, T> {
 }
 
 impl Located<'static, ()> {
+    pub(crate) const SERDE_NAME: &'static str = "__smallish_magic_located__";
+
     pub const fn new() -> Self {
         Self {
             source: None,
