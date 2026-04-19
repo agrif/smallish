@@ -189,7 +189,7 @@ where
             .and_then(|s| core::str::from_utf8(s).ok())
         {
             writeln!(f, "  | {}", line)?;
-            writeln!(f, "    {}^", " ".repeat(self.location.column))?;
+            writeln!(f, "    {: <1$}^", "", self.location.column)?;
         }
         Ok(())
     }
