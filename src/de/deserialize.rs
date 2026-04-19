@@ -626,6 +626,56 @@ where
     }
 }
 
+// helper to forward to self.de, in the same style as
+// serde::forward_to_deserialize_any!
+macro_rules! forward_to_inner_deserialize {
+    // build one method, with arguments
+    (@method, $func:ident<$l:tt, $v:ident>($($arg:ident : $ty:ty),*)) => {
+        paste::paste! {
+            #[inline]
+            fn [<deserialize_ $func>]<$v>(self, $($arg: $ty,)* visitor: $v) -> Result<$v::Value, Self::Error>
+            where
+                $v: ::serde::de::Visitor<$l>,
+            {
+                self.de.[<deserialize_ $func>]($($arg,)* visitor)
+            }
+        }
+    };
+
+    // build one method, dispatching on type
+    (@helper, unit_struct<$l:tt, $v:ident>) => {
+        forward_to_inner_deserialize! { @method, unit_struct<$l, $v>(name: &'static str) }
+    };
+    (@helper, newtype_struct<$l:tt, $v:ident>) => {
+        forward_to_inner_deserialize! { @method, newtype_struct<$l, $v>(name: &'static str) }
+    };
+    (@helper, tuple<$l:tt, $v:ident>) => {
+        forward_to_inner_deserialize! { @method, tuple<$l, $v>(len: usize) }
+    };
+    (@helper, tuple_struct<$l:tt, $v:ident>) => {
+        forward_to_inner_deserialize! { @method, tuple_struct<$l, $v>(name: &'static str, len: usize) }
+    };
+    (@helper, struct<$l:tt, $v:ident>) => {
+        forward_to_inner_deserialize! { @method, struct<$l, $v>(name: &'static str, fields: &'static [&'static str]) }
+    };
+    (@helper, enum<$l:tt, $v:ident>) => {
+        forward_to_inner_deserialize! { @method, enum<$l, $v>(name: &'static str, variants: &'static [&'static str]) }
+    };
+
+    // generic helper that only accepts visitor
+    (@helper, $func:ident<$l:tt, $v:ident>) => {
+        forward_to_inner_deserialize! { @method, $func<$l, $v>() }
+    };
+
+    // entry points
+    (<$visitor:ident : Visitor<$lifetime:tt>> $($func:ident)*) => {
+        $(forward_to_inner_deserialize! { @helper, $func<$lifetime, $visitor> })*
+    };
+    ($($func:ident)*) => {
+        forward_to_inner_deserialize! { <V: Visitor<'de>> $($func)* }
+    };
+}
+
 #[derive(Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 struct Access<'a, 'de: 'a, S> {
@@ -760,16 +810,8 @@ where
 {
     type Error = Error;
 
-    fn deserialize_any<V>(self, _visitor: V) -> Result<V::Value, Self::Error>
-    where
-        V: de::Visitor<'de>,
-    {
-        self.de.next()?;
-        Err(Error::InvalidType)
-    }
-
-    serde::forward_to_deserialize_any! {
-        bool i8 i16 i32 i64 i128 u8 u16 u32 u64 u128 f32 f64 char
+    forward_to_inner_deserialize! {
+        any bool i8 i16 i32 i64 i128 u8 u16 u32 u64 u128 f32 f64 char
         option unit unit_struct newtype_struct seq tuple
         tuple_struct map struct enum identifier ignored_any
     }
