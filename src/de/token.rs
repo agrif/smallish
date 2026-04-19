@@ -359,6 +359,60 @@ impl<'de> Tokenizer<'de> {
         .parse(input)
     }
 
+    fn bytes_plain<'a>(input: &'a [u8]) -> IResult<&'a [u8], SliceChunk<&'a [u8]>> {
+        combinator::verify(bytes::is_not("\"\\"), |s: &[u8]| !s.is_empty())
+            .map(SliceChunk::Slice)
+            .parse(input)
+    }
+
+    fn single_byte_escape<'a>(input: &'a [u8]) -> IResult<&'a [u8], u8> {
+        branch::alt((
+            character::char('n').map(|_| b'\n'),
+            character::char('r').map(|_| b'\r'),
+            character::char('t').map(|_| b'\t'),
+            character::char('\\').map(|_| b'\\'),
+            character::char('0').map(|_| b'\0'),
+            character::char('"').map(|_| b'"'),
+            character::char('\'').map(|_| b'\''),
+            // \x7f
+            sequence::preceded(
+                character::char('x'),
+                bytes::take_while_m_n(2, 2, |c: u8| c.is_ascii_hexdigit()).map_opt(|v| {
+                    // safety: this escape only recognizes valid ascii
+                    // and only up to ff
+                    let v = unsafe { core::str::from_utf8_unchecked(v) };
+                    u8::from_str_radix(v, 16).ok()
+                }),
+            ),
+        ))
+        .parse(input)
+    }
+
+    fn bytes_escape<'a>(input: &'a [u8]) -> IResult<&'a [u8], SliceChunk<&'a [u8]>> {
+        Self::single_byte_escape
+            .map(SliceChunk::Item)
+            .parse(input)
+            .map_err(|e| e.map(|e: NomError<_>| e.replace(TokenError::UnknownEscape)))
+    }
+
+    pub(crate) fn bytes_chunk<'a>(input: &'a [u8]) -> IResult<&'a [u8], SliceChunk<&'a [u8]>> {
+        branch::alt((
+            Self::bytes_plain,
+            sequence::preceded(character::char('\\'), combinator::cut(Self::bytes_escape)),
+        ))
+        .parse(input)
+    }
+
+    fn bytes<'a>(input: &'a [u8]) -> IResult<&'a [u8], Token<'a>> {
+        sequence::delimited(
+            bytes::tag("b\""),
+            combinator::cut(combinator::recognize(multi::many0_count(Self::bytes_chunk))),
+            character::char('"'),
+        )
+        .map(|s| Token::Value(Value::Bytes(Escaped::new_unchecked(s))))
+        .parse(input)
+    }
+
     fn character<'a>(input: &'a [u8]) -> IResult<&'a [u8], Token<'a>> {
         sequence::delimited(
             character::char('\''),
@@ -390,6 +444,7 @@ impl<'de> Tokenizer<'de> {
             sequence::terminated(Self::float, Self::whitespace0),
             sequence::terminated(Self::character, Self::whitespace0),
             sequence::terminated(Self::string, Self::whitespace0),
+            sequence::terminated(Self::bytes, Self::whitespace0),
             sequence::terminated(Self::ident, Self::whitespace0).map(|id| match id {
                 "null" => Token::Value(Value::Null),
                 "true" => Token::Value(Value::Bool(true)),

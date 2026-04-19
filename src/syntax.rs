@@ -30,6 +30,7 @@ pub enum Value<'de> {
     Float(Float),
     Character(char),
     String(Escaped<&'de str>),
+    Bytes(Escaped<&'de [u8]>),
 }
 
 #[derive(Clone, Debug)]
