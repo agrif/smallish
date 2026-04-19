@@ -22,8 +22,14 @@ pub enum Error {
     #[error("unescape buffer full")]
     BufferFull,
 
-    #[error("serde custom error")]
+    #[cfg(feature = "custom-error-messages")]
+    #[error("{0}")]
+    Custom(heapless::String<64>),
+
+    #[cfg(not(feature = "custom-error-messages"))]
+    #[error("serde error")]
     Custom,
+
     #[error("invalid type")]
     InvalidType,
     #[error("invalid value")]
@@ -56,6 +62,21 @@ impl From<UnescapeError> for Error {
 }
 
 impl de::Error for Error {
+    #[cfg(feature = "custom-error-messages")]
+    fn custom<T>(msg: T) -> Self
+    where
+        T: core::fmt::Display,
+    {
+        use core::fmt::Write;
+        let mut s = heapless::String::new();
+        if write!(&mut s, "{}", msg).is_err() {
+            s.clear();
+            let _ = s.push_str("<too large for buffer>");
+        }
+        Self::Custom(s)
+    }
+
+    #[cfg(not(feature = "custom-error-messages"))]
     fn custom<T>(_msg: T) -> Self
     where
         T: core::fmt::Display,
