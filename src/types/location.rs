@@ -2,39 +2,11 @@ pub type LocResult<'de, T, E> = Result<Located<'de, T>, Located<'de, E>>;
 
 #[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct Location {
+pub struct Located<'de, T> {
+    pub source: Option<&'de [u8]>,
     pub line: usize,
     pub column: usize,
     pub offset: usize,
-}
-
-impl Location {
-    pub const fn new() -> Self {
-        Self {
-            line: 1,
-            column: 0,
-            offset: 0,
-        }
-    }
-}
-
-impl Default for Location {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl core::fmt::Display for Location {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "{}:{}", self.line, self.column)
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct Located<'de, T> {
-    pub source: Option<&'de [u8]>,
-    pub location: Location,
     pub value: T,
 }
 
@@ -42,7 +14,9 @@ impl Located<'static, ()> {
     pub const fn new() -> Self {
         Self {
             source: None,
-            location: Location::new(),
+            line: 1,
+            column: 0,
+            offset: 0,
             value: (),
         }
     }
@@ -75,18 +49,20 @@ impl<'de, T> Located<'de, T> {
         }
 
         if let Some(last_newline) = last_newline {
-            self.location.line += newlines;
-            self.location.column = amt - last_newline - 1;
+            self.line += newlines;
+            self.column = amt - last_newline - 1;
         } else {
-            self.location.column += amt;
+            self.column += amt;
         }
-        self.location.offset += amt;
+        self.offset += amt;
     }
 
     pub fn wrap<U>(&self, value: U) -> Located<'de, U> {
         Located {
             source: self.source,
-            location: self.location,
+            line: self.line,
+            column: self.column,
+            offset: self.offset,
             value,
         }
     }
@@ -98,7 +74,9 @@ impl<'de, T> Located<'de, T> {
     pub fn map<U>(self, f: impl FnOnce(T) -> U) -> Located<'de, U> {
         Located {
             source: self.source,
-            location: self.location,
+            line: self.line,
+            column: self.column,
+            offset: self.offset,
             value: f(self.value),
         }
     }
@@ -111,7 +89,9 @@ impl<'de, T> Located<'de, T> {
         (
             Located {
                 source: self.source,
-                location: self.location,
+                line: self.line,
+                column: self.column,
+                offset: self.offset,
                 value: (),
             },
             self.value,
@@ -120,15 +100,15 @@ impl<'de, T> Located<'de, T> {
 
     pub fn source_line(&self) -> Option<&'de [u8]> {
         let source = self.source?;
-        let start = source[..self.location.offset]
+        let start = source[..self.offset]
             .iter()
             .rposition(|c| *c == b'\n')
             .map(|i| i + 1)
             .unwrap_or(0);
-        let end = source[self.location.offset..]
+        let end = source[self.offset..]
             .iter()
             .position(|c| *c == b'\n')
-            .map(|i| self.location.offset + i)
+            .map(|i| self.offset + i)
             .unwrap_or(source.len());
         Some(&source[start..end])
     }
@@ -158,7 +138,9 @@ where
     fn default() -> Self {
         Self {
             source: None,
-            location: Default::default(),
+            line: 1,
+            column: 0,
+            offset: 0,
             value: Default::default(),
         }
     }
@@ -183,13 +165,17 @@ where
     T: core::fmt::Display,
 {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        writeln!(f, "at source location {}, {}", self.location, self.value)?;
+        writeln!(
+            f,
+            "at source location {}:{}, {}",
+            self.line, self.column, self.value
+        )?;
         if let Some(line) = self
             .source_line()
             .and_then(|s| core::str::from_utf8(s).ok())
         {
             writeln!(f, "  | {}", line)?;
-            writeln!(f, "    {: <1$}^", "", self.location.column)?;
+            writeln!(f, "    {: <1$}^", "", self.column)?;
         }
         Ok(())
     }
