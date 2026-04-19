@@ -21,6 +21,8 @@ struct Options<'a> {
     #[serde(default)]
     foo: DirSubOptions,
     bar: &'a str,
+    #[serde(default)]
+    baz: smallish::types::Escaped<&'a [u8]>,
 }
 
 #[derive(Clone, Debug, Default, serde::Deserialize)]
@@ -54,7 +56,7 @@ Go dir=North
 Go dir=(Turnwise 2)
 Go dir=null opts={sub={flag=true}}
 SetOptions foo={flag=false} bar="bar" madeup={this=2}
-SetOptions bar="hello\nworld"
+SetOptions bar="hello\nworld" baz=b"\n\n"
 NewtypeTuple [0, 1] '\u{1f914}'
 NewtypeTuple [0, 1] '🤔'
 "#;

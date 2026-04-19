@@ -7,9 +7,14 @@ use crate::de::{
     TokenError, Tokenizer,
 };
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default, serde::Deserialize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[serde(rename = "__smallish_magic_escaped__")]
 pub struct Escaped<T>(T);
+
+impl<T> Escaped<T> {
+    pub(crate) const SERDE_NAME: &'static str = "__smallish_magic_escaped__";
+}
 
 #[derive(Clone, Debug, thiserror::Error)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]

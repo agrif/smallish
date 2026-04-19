@@ -3,7 +3,7 @@ use serde::de;
 
 use super::{ParseError, Parser, ParserState};
 use crate::syntax::{Event, Float, Integer, Value};
-use crate::types::{Located, UnescapeError};
+use crate::types::{Escaped, Located, UnescapeError};
 use crate::Flavor;
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -117,6 +117,7 @@ impl de::Error for Error {
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 enum Flag {
     NewtypeEnum,
+    Escaped,
 }
 
 #[derive(Debug)]
@@ -403,17 +404,24 @@ where
     where
         V: de::Visitor<'de>,
     {
+        let escaped = if let Some(Flag::Escaped) = self.flag {
+            self.flag = None;
+            true
+        } else {
+            false
+        };
+
         let v = self.next_with(|t| {
             as_variant!(t, Event::Value).and_then(as_variant!(Value::String(v) => v))
         })?;
 
-        if v.str_has_escapes() {
+        if escaped || !v.str_has_escapes() {
+            visitor.visit_borrowed_str(*v)
+        } else {
             let unescape = core::mem::replace(&mut self.unescape, &mut []);
             let (unescape, v) = v.unescape_str(unescape)?;
             self.unescape = unescape;
             visitor.visit_borrowed_str(v)
-        } else {
-            visitor.visit_borrowed_str(*v)
         }
     }
 
@@ -428,17 +436,24 @@ where
     where
         V: de::Visitor<'de>,
     {
+        let escaped = if let Some(Flag::Escaped) = self.flag {
+            self.flag = None;
+            true
+        } else {
+            false
+        };
+
         let v = self.next_with(|t| {
             as_variant!(t, Event::Value).and_then(as_variant!(Value::Bytes(v) => v))
         })?;
 
-        if v.bytes_has_escapes() {
+        if escaped || !v.bytes_has_escapes() {
+            visitor.visit_borrowed_bytes(*v)
+        } else {
             let unescape = core::mem::replace(&mut self.unescape, &mut []);
             let (unescape, v) = v.unescape_bytes(unescape)?;
             self.unescape = unescape;
             visitor.visit_borrowed_bytes(v)
-        } else {
-            visitor.visit_borrowed_bytes(*v)
         }
     }
 
@@ -485,12 +500,15 @@ where
 
     fn deserialize_newtype_struct<V>(
         self,
-        _name: &'static str,
+        name: &'static str,
         visitor: V,
     ) -> Result<V::Value, Self::Error>
     where
         V: de::Visitor<'de>,
     {
+        if name == Escaped::<()>::SERDE_NAME {
+            self.flag = Some(Flag::Escaped);
+        }
         visitor.visit_newtype_struct(self)
     }
 
