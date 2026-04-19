@@ -183,7 +183,7 @@ where
     T: core::fmt::Display,
 {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        writeln!(f, "{} at source location {}", self.value, self.location)?;
+        writeln!(f, "at source location {}, {}", self.location, self.value)?;
         if let Some(line) = self
             .source_line()
             .and_then(|s| core::str::from_utf8(s).ok())
