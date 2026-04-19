@@ -415,11 +415,11 @@ where
             as_variant!(t, Event::Value).and_then(as_variant!(Value::String(v) => v))
         })?;
 
-        if escaped || !v.str_has_escapes() {
+        if escaped || !v.has_escapes() {
             visitor.visit_borrowed_str(*v)
         } else {
             let unescape = core::mem::replace(&mut self.unescape, &mut []);
-            let (unescape, v) = v.unescape_str(unescape)?;
+            let (unescape, v) = v.unescape(unescape)?;
             self.unescape = unescape;
             visitor.visit_borrowed_str(v)
         }
@@ -447,11 +447,11 @@ where
             as_variant!(t, Event::Value).and_then(as_variant!(Value::Bytes(v) => v))
         })?;
 
-        if escaped || !v.bytes_has_escapes() {
+        if escaped || !v.has_escapes() {
             visitor.visit_borrowed_bytes(*v)
         } else {
             let unescape = core::mem::replace(&mut self.unescape, &mut []);
-            let (unescape, v) = v.unescape_bytes(unescape)?;
+            let (unescape, v) = v.unescape(unescape)?;
             self.unescape = unescape;
             visitor.visit_borrowed_bytes(v)
         }
