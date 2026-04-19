@@ -4,7 +4,7 @@ use nom::{
 };
 
 use crate::syntax::{Integer, Token, Value};
-use crate::types::{Escaped, LocResult, Located};
+use crate::types::{Escaped, EscapedFragment, LocResult, Located};
 
 #[derive(Clone, Debug, thiserror::Error)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
@@ -56,13 +56,6 @@ impl<I, E> error::FromExternalError<I, E> for NomError<I> {
 }
 
 pub(crate) type IResult<I, O> = nom::IResult<I, O, NomError<I>>;
-
-#[derive(Clone, Debug)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub(crate) enum SliceChunk<I: nom::Input> {
-    Slice(I),
-    Item(I::Item),
-}
 
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
@@ -278,11 +271,11 @@ impl<'de> Tokenizer<'de> {
             .parse(input)
     }
 
-    fn string_plain<'a>(input: &'a [u8]) -> IResult<&'a [u8], SliceChunk<&'a str>> {
+    fn string_plain<'a>(input: &'a [u8]) -> IResult<&'a [u8], EscapedFragment<&'a str, char>> {
         Self::parse_utf8(combinator::verify(bytes::is_not("\"\\"), |s: &[u8]| {
             !s.is_empty()
         }))
-        .map(SliceChunk::Slice)
+        .map(EscapedFragment::Slice)
         .parse(input)
     }
 
@@ -327,14 +320,16 @@ impl<'de> Tokenizer<'de> {
         .parse(input)
     }
 
-    fn string_escape<'a>(input: &'a [u8]) -> IResult<&'a [u8], SliceChunk<&'a str>> {
+    fn string_escape<'a>(input: &'a [u8]) -> IResult<&'a [u8], EscapedFragment<&'a str, char>> {
         Self::character_escape
-            .map(SliceChunk::Item)
+            .map(EscapedFragment::Item)
             .parse(input)
             .map_err(|e| e.map(|e: NomError<_>| e.replace(TokenError::UnknownEscape)))
     }
 
-    pub(crate) fn string_chunk<'a>(input: &'a [u8]) -> IResult<&'a [u8], SliceChunk<&'a str>> {
+    pub(crate) fn string_chunk<'a>(
+        input: &'a [u8],
+    ) -> IResult<&'a [u8], EscapedFragment<&'a str, char>> {
         branch::alt((
             Self::string_plain,
             sequence::preceded(character::char('\\'), combinator::cut(Self::string_escape)),
@@ -359,9 +354,9 @@ impl<'de> Tokenizer<'de> {
         .parse(input)
     }
 
-    fn bytes_plain<'a>(input: &'a [u8]) -> IResult<&'a [u8], SliceChunk<&'a [u8]>> {
+    fn bytes_plain<'a>(input: &'a [u8]) -> IResult<&'a [u8], EscapedFragment<&'a [u8], u8>> {
         combinator::verify(bytes::is_not("\"\\"), |s: &[u8]| !s.is_empty())
-            .map(SliceChunk::Slice)
+            .map(EscapedFragment::Slice)
             .parse(input)
     }
 
@@ -388,14 +383,16 @@ impl<'de> Tokenizer<'de> {
         .parse(input)
     }
 
-    fn bytes_escape<'a>(input: &'a [u8]) -> IResult<&'a [u8], SliceChunk<&'a [u8]>> {
+    fn bytes_escape<'a>(input: &'a [u8]) -> IResult<&'a [u8], EscapedFragment<&'a [u8], u8>> {
         Self::single_byte_escape
-            .map(SliceChunk::Item)
+            .map(EscapedFragment::Item)
             .parse(input)
             .map_err(|e| e.map(|e: NomError<_>| e.replace(TokenError::UnknownEscape)))
     }
 
-    pub(crate) fn bytes_chunk<'a>(input: &'a [u8]) -> IResult<&'a [u8], SliceChunk<&'a [u8]>> {
+    pub(crate) fn bytes_chunk<'a>(
+        input: &'a [u8],
+    ) -> IResult<&'a [u8], EscapedFragment<&'a [u8], u8>> {
         branch::alt((
             Self::bytes_plain,
             sequence::preceded(character::char('\\'), combinator::cut(Self::bytes_escape)),

@@ -2,10 +2,7 @@ use core::borrow::Borrow;
 
 use nom::{combinator, multi, Parser};
 
-use crate::de::{
-    token::{IResult, SliceChunk},
-    TokenError, Tokenizer,
-};
+use crate::de::{token::IResult, TokenError, Tokenizer};
 
 #[derive(Clone, Debug, Default, serde::Deserialize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
@@ -25,11 +22,20 @@ pub enum UnescapeError {
     BufferFull,
 }
 
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub enum EscapedFragment<Slice, Item> {
+    Slice(Slice),
+    Item(Item),
+}
+
 trait Stringlike<Slice: ?Sized>: Borrow<Slice>
 where
     for<'a> &'a Slice: nom::Input,
 {
-    fn chunk<'a>(input: &'a [u8]) -> IResult<&'a [u8], SliceChunk<&'a Slice>>;
+    fn chunk<'a>(
+        input: &'a [u8],
+    ) -> IResult<&'a [u8], EscapedFragment<&'a Slice, <&'a Slice as nom::Input>::Item>>;
 
     fn as_bytes(slice: &Slice) -> &[u8];
 
@@ -44,7 +50,7 @@ impl<T> Stringlike<str> for T
 where
     T: Borrow<str>,
 {
-    fn chunk<'a>(input: &'a [u8]) -> IResult<&'a [u8], SliceChunk<&'a str>> {
+    fn chunk<'a>(input: &'a [u8]) -> IResult<&'a [u8], EscapedFragment<&'a str, char>> {
         Tokenizer::string_chunk(input)
     }
 
@@ -71,7 +77,7 @@ impl<T> Stringlike<[u8]> for T
 where
     T: Borrow<[u8]>,
 {
-    fn chunk<'a>(input: &'a [u8]) -> IResult<&'a [u8], SliceChunk<&'a [u8]>> {
+    fn chunk<'a>(input: &'a [u8]) -> IResult<&'a [u8], EscapedFragment<&'a [u8], u8>> {
         Tokenizer::bytes_chunk(input)
     }
 
@@ -167,7 +173,7 @@ impl<T> Escaped<T> {
         !matches!(
             T::chunk.parse(T::as_bytes(self.0.borrow())),
             // if there is a single slice chunk, it has no escapes
-            Ok((b"", SliceChunk::Slice(_))),
+            Ok((b"", EscapedFragment::Slice(_))),
         )
     }
 
@@ -189,7 +195,7 @@ impl<T> Escaped<T> {
                     assert!(rest.len() < input.len());
                     input = rest;
                     match chunk {
-                        SliceChunk::Slice(s) => {
+                        EscapedFragment::Slice(s) => {
                             let bytes = T::as_bytes(s);
                             let amt = bytes.len();
                             buffer
@@ -198,7 +204,7 @@ impl<T> Escaped<T> {
                                 .copy_from_slice(bytes);
                             i += amt;
                         }
-                        SliceChunk::Item(c) => {
+                        EscapedFragment::Item(c) => {
                             let amt = T::item_len(c);
                             T::item_write(
                                 c,
