@@ -106,6 +106,12 @@ where
         self.impl_has_escapes()
     }
 
+    pub fn str_fragments(
+        &self,
+    ) -> impl Iterator<Item = Result<EscapedFragment<&str, char>, TokenError>> {
+        self.impl_fragments()
+    }
+
     pub fn unescape_str<'buf>(
         &self,
         buffer: &'buf mut [u8],
@@ -125,6 +131,12 @@ where
 
     pub fn bytes_has_escapes(&self) -> bool {
         self.impl_has_escapes()
+    }
+
+    pub fn bytes_fragments(
+        &self,
+    ) -> impl Iterator<Item = Result<EscapedFragment<&[u8], u8>, TokenError>> {
+        self.impl_fragments()
     }
 
     pub fn unescape_bytes<'buf>(
@@ -170,6 +182,19 @@ impl<T> Escaped<T> {
         )
     }
 
+    fn impl_fragments<'a, B, I>(
+        &'a self,
+    ) -> impl Iterator<Item = Result<EscapedFragment<&'a B, I>, TokenError>>
+    where
+        T: Stringlike<B, I>,
+        B: ?Sized + 'a,
+    {
+        FragmentIterator::<'a, T, B, I> {
+            input: T::as_bytes(self.0.borrow()),
+            _marker: Default::default(),
+        }
+    }
+
     fn impl_unescape<'buf, B, I>(
         &self,
         buffer: &'buf mut [u8],
@@ -179,43 +204,69 @@ impl<T> Escaped<T> {
         B: ?Sized,
         I: Copy,
     {
-        let mut input = T::as_bytes(self.0.borrow());
         let mut i = 0;
-        while !input.is_empty() {
-            match T::chunk.parse(input) {
-                Ok((rest, chunk)) => {
-                    assert!(rest.len() < input.len());
-                    input = rest;
-                    match chunk {
-                        EscapedFragment::Slice(s) => {
-                            let bytes = T::as_bytes(s);
-                            let amt = bytes.len();
-                            buffer
-                                .get_mut(i..i + amt)
-                                .ok_or(UnescapeError::BufferFull)?
-                                .copy_from_slice(bytes);
-                            i += amt;
-                        }
-                        EscapedFragment::Item(c) => {
-                            let amt = T::item_len(c);
-                            T::item_write(
-                                c,
-                                buffer
-                                    .get_mut(i..i + amt)
-                                    .ok_or(UnescapeError::BufferFull)?,
-                            );
-                            i += amt;
-                        }
-                    }
+        for chunk in self.impl_fragments() {
+            match chunk? {
+                EscapedFragment::Slice(s) => {
+                    let bytes = T::as_bytes(s);
+                    let amt = bytes.len();
+                    buffer
+                        .get_mut(i..i + amt)
+                        .ok_or(UnescapeError::BufferFull)?
+                        .copy_from_slice(bytes);
+                    i += amt;
                 }
-                // can only be caused by a bad use of new_unchecked
-                Err(nom::Err::Incomplete(_)) => Err(TokenError::UnknownToken)?,
-                Err(nom::Err::Error(e) | nom::Err::Failure(e)) => Err(e.error)?,
+                EscapedFragment::Item(c) => {
+                    let amt = T::item_len(c);
+                    T::item_write(
+                        c,
+                        buffer
+                            .get_mut(i..i + amt)
+                            .ok_or(UnescapeError::BufferFull)?,
+                    );
+                    i += amt;
+                }
             }
         }
 
         let (result, unused) = buffer.split_at_mut(i);
         Ok((unused, T::finalize(result)))
+    }
+}
+
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+struct FragmentIterator<'a, T, B: ?Sized, I> {
+    input: &'a [u8],
+    _marker: core::marker::PhantomData<(T, &'a B, I)>,
+}
+
+impl<'a, T, B: ?Sized, I> core::iter::FusedIterator for FragmentIterator<'a, T, B, I> where
+    T: Stringlike<B, I>
+{
+}
+
+impl<'a, T, B: ?Sized, I> Iterator for FragmentIterator<'a, T, B, I>
+where
+    T: Stringlike<B, I>,
+{
+    type Item = Result<EscapedFragment<&'a B, I>, TokenError>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.input.is_empty() {
+            return None;
+        }
+
+        match T::chunk.parse(self.input) {
+            Ok((rest, chunk)) => {
+                assert!(rest.len() < self.input.len());
+                self.input = rest;
+                Some(Ok(chunk))
+            }
+            // can only be caused by a bad use of new_unchecked
+            Err(nom::Err::Incomplete(_)) => Some(Err(TokenError::UnknownToken)),
+            Err(nom::Err::Error(e) | nom::Err::Failure(e)) => Some(Err(e.error)),
+        }
     }
 }
 
