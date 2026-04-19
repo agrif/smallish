@@ -1,6 +1,6 @@
 pub type LocResult<'de, T, E> = Result<Located<'de, T>, Located<'de, E>>;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, serde::Deserialize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Located<'de, T> {
     pub source: Option<&'de [u8]>,
@@ -160,6 +160,21 @@ impl<'de, T> core::ops::Deref for Located<'de, T> {
 impl<'de, T> core::ops::DerefMut for Located<'de, T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.value
+    }
+}
+
+impl<'de, T> core::fmt::Debug for Located<'de, T>
+where
+    T: core::fmt::Debug,
+{
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("Located")
+            .field("source", &self.source.map(|_| "..."))
+            .field("line", &self.line)
+            .field("column", &self.column)
+            .field("offset", &self.offset)
+            .field("value", &self.value)
+            .finish()
     }
 }
 
