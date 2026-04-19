@@ -1,6 +1,6 @@
 use super::{TokenError, Tokenizer};
 use crate::syntax::{Event, Token, TokenKind};
-use crate::types::{LocResult, Located, Location};
+use crate::types::{LocResult, Located};
 use crate::Flavor;
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -41,33 +41,23 @@ impl<'de> From<Located<'de, TokenError>> for Located<'de, ParseError> {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct ParserState(Location, State);
+pub struct ParserState(State);
 
 impl ParserState {
     pub const fn zero() -> Self {
         Self(
             // Use all zeros so this can be placed in bss if needed.
             // This is never used without being initialized first.
-            Location {
-                line: 0,
-                column: 0,
-                offset: 0,
-            },
             State::Value,
         )
     }
 }
 
-impl Default for ParserState {
-    fn default() -> Self {
-        Self::zero()
-    }
-}
-
 #[derive(Clone, Copy, Debug, Default)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[repr(u8)]
 enum State {
     #[default]
     // should have value 0 so it can fit in bss
@@ -131,23 +121,19 @@ where
         Err(ParseError::UnexpectedToken(t.kind(), expected))
     }
 
-    fn located_state(&self) -> Option<Located<'de, State>> {
+    fn only_stack_state(&self) -> Option<State> {
         self.state_top
             .checked_sub(1)
             .and_then(|i| self.state.as_ref().get(i))
             .copied()
-            .map(|ParserState(location, value)| Located {
-                source: self.location().source,
-                location,
-                value,
-            })
+            .map(|s| s.0)
     }
 
     fn state(&self) -> State {
         self.state_top
             .checked_sub(1)
             .and_then(|i| self.state.as_ref().get(i))
-            .map(|s| s.1)
+            .map(|s| s.0)
             .unwrap_or(self.initial_state)
     }
 
@@ -157,15 +143,15 @@ where
             .checked_sub(1)
             .and_then(|i| self.state.as_mut().get_mut(i))
         {
-            dest.1 = state;
+            dest.0 = state;
         } else {
             self.initial_state = state;
         }
     }
 
-    fn push(&mut self, loc: &Located<'de, ()>, state: State) -> Result<(), ParseError> {
+    fn push(&mut self, state: State) -> Result<(), ParseError> {
         if self.state_top < self.state.as_ref().len() {
-            self.state.as_mut()[self.state_top] = ParserState(loc.location, state);
+            self.state.as_mut()[self.state_top] = ParserState(state);
             self.state_top += 1;
             Ok(())
         } else {
@@ -194,22 +180,22 @@ where
                 Token::Newline => Ok(None),
                 Token::ParenOpen => {
                     self.transition(State::ValueClose);
-                    self.push(loc, State::Value)?;
+                    self.push(State::Value)?;
                     Ok(None)
                 }
                 Token::ListOpen => {
                     self.transition(State::ValueClose);
-                    self.push(loc, State::ListItem)?;
+                    self.push(State::ListItem)?;
                     Ok(Some(Event::ListOpen))
                 }
                 Token::MapOpen => {
                     self.transition(State::ValueClose);
-                    self.push(loc, State::MapItem)?;
+                    self.push(State::MapItem)?;
                     Ok(Some(Event::MapOpen))
                 }
                 Token::Ident(name) => {
                     self.transition(State::ValueClose);
-                    self.push(loc, State::Enum)?;
+                    self.push(State::Enum)?;
                     Ok(Some(Event::EnumOpen(name)))
                 }
                 Token::Value(v) => {
@@ -239,17 +225,17 @@ where
             State::FieldValue => match tok {
                 Token::ParenOpen => {
                     self.pop()?;
-                    self.push(loc, State::Value)?;
+                    self.push(State::Value)?;
                     Ok(None)
                 }
                 Token::ListOpen => {
                     self.pop()?;
-                    self.push(loc, State::ListItem)?;
+                    self.push(State::ListItem)?;
                     Ok(Some(Event::ListOpen))
                 }
                 Token::MapOpen => {
                     self.pop()?;
-                    self.push(loc, State::MapItem)?;
+                    self.push(State::MapItem)?;
                     Ok(Some(Event::MapOpen))
                 }
                 Token::Ident(name) => {
@@ -257,10 +243,10 @@ where
                     // careful: enum parents can only support bare enums here
                     // but full enums are okay in maps
                     if matches!(self.state(), State::Enum) {
-                        self.push(loc, State::FieldBareEnum)?;
+                        self.push(State::FieldBareEnum)?;
                         self.unused_token = Some(Ok(loc.wrap(tok)));
                     } else {
-                        self.push(loc, State::Enum)?;
+                        self.push(State::Enum)?;
                     }
                     Ok(Some(Event::EnumOpen(name)))
                 }
@@ -283,12 +269,12 @@ where
                 Token::Newline => Ok(None),
                 Token::ParenOpen => {
                     self.transition(State::ListSep);
-                    self.push(loc, State::Value)?;
+                    self.push(State::Value)?;
                     Ok(None)
                 }
                 Token::ListOpen => {
                     self.transition(State::ListSep);
-                    self.push(loc, State::ListItem)?;
+                    self.push(State::ListItem)?;
                     Ok(Some(Event::ListOpen))
                 }
                 Token::ListClose => {
@@ -297,12 +283,12 @@ where
                 }
                 Token::MapOpen => {
                     self.transition(State::ListSep);
-                    self.push(loc, State::MapItem)?;
+                    self.push(State::MapItem)?;
                     Ok(Some(Event::MapOpen))
                 }
                 Token::Ident(name) => {
                     self.transition(State::ListSep);
-                    self.push(loc, State::Enum)?;
+                    self.push(State::Enum)?;
                     Ok(Some(Event::EnumOpen(name)))
                 }
                 Token::Value(v) => {
@@ -337,7 +323,7 @@ where
                 }
                 Token::Ident(name) => {
                     self.transition(State::MapSep);
-                    self.push(loc, State::FieldEquals)?;
+                    self.push(State::FieldEquals)?;
                     Ok(Some(Event::Key(name)))
                 }
                 t => self.unexpected(t, &[Newline, MapClose, Ident]),
@@ -366,19 +352,19 @@ where
                     Ok(Some(Event::EnumClose))
                 }
                 Token::ParenOpen => {
-                    self.push(loc, State::Value)?;
+                    self.push(State::Value)?;
                     Ok(None)
                 }
                 Token::ListOpen => {
-                    self.push(loc, State::ListItem)?;
+                    self.push(State::ListItem)?;
                     Ok(Some(Event::ListOpen))
                 }
                 Token::MapOpen => {
-                    self.push(loc, State::MapItem)?;
+                    self.push(State::MapItem)?;
                     Ok(Some(Event::MapOpen))
                 }
                 Token::Ident(name) => {
-                    self.push(loc, State::FieldEquals)?;
+                    self.push(State::FieldEquals)?;
                     Ok(Some(Event::Key(name)))
                 }
                 Token::Value(v) => Ok(Some(Event::Value(v))),
@@ -418,36 +404,31 @@ where
                 Ok(tok) => tok,
                 Err(e) => match e.into() {
                     ParseError::Eof => {
-                        let (loc, val) = match self.located_state() {
-                            Some(state) if matches!(*state, State::Enum) => {
-                                let state = state.pure();
+                        let val = match self.only_stack_state() {
+                            Some(state) if matches!(state, State::Enum) => {
                                 let _ = self.pop();
-                                (state, Ok(Event::EnumClose))
+                                Ok(Event::EnumClose)
                             }
                             Some(state)
                                 if matches!(
-                                    *state,
+                                    state,
                                     State::FieldEquals | State::FieldValue | State::FieldBareEnum
                                 ) =>
                             {
-                                (state.pure(), Err(ParseError::IncompleteField))
+                                Err(ParseError::IncompleteField)
                             }
-                            Some(state) => (state.pure(), Err(ParseError::UnmatchedBraces)),
-                            None => {
-                                let r = match self.initial_state {
-                                    State::ListItem | State::ListSep => {
-                                        self.initial_state = State::Value;
-                                        Ok(Event::ListClose)
-                                    }
-                                    State::MapItem | State::MapSep => {
-                                        self.initial_state = State::Value;
-                                        Ok(Event::MapClose)
-                                    }
-                                    _ => Err(ParseError::Eof),
-                                };
-
-                                (loc.pure(), r)
-                            }
+                            Some(_) => Err(ParseError::UnmatchedBraces),
+                            None => match self.initial_state {
+                                State::ListItem | State::ListSep => {
+                                    self.initial_state = State::Value;
+                                    Ok(Event::ListClose)
+                                }
+                                State::MapItem | State::MapSep => {
+                                    self.initial_state = State::Value;
+                                    Ok(Event::MapClose)
+                                }
+                                _ => Err(ParseError::Eof),
+                            },
                         };
                         return loc.replace(val).to_result();
                     }
