@@ -55,7 +55,7 @@ impl<I, E> error::FromExternalError<I, E> for NomError<I> {
     }
 }
 
-type IResult<I, O> = nom::IResult<I, O, NomError<I>>;
+pub(crate) type IResult<I, O> = nom::IResult<I, O, NomError<I>>;
 
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]

@@ -355,9 +355,9 @@ where
             as_variant!(t, Event::Value).and_then(as_variant!(Value::String(v) => v))
         })?;
 
-        if v.has_escapes() {
+        if v.str_has_escapes() {
             let unescape = core::mem::replace(&mut self.unescape, &mut []);
-            let (unescape, v) = v.unescape(unescape)?;
+            let (unescape, v) = v.unescape_str(unescape)?;
             self.unescape = unescape;
             visitor.visit_borrowed_str(v)
         } else {
@@ -372,18 +372,29 @@ where
         self.deserialize_str(visitor)
     }
 
-    fn deserialize_bytes<V>(self, _visitor: V) -> Result<V::Value, Self::Error>
+    fn deserialize_bytes<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: de::Visitor<'de>,
     {
-        Err(Error::NotImplemented("bytes"))
+        let v = self.next_with(|t| {
+            as_variant!(t, Event::Value).and_then(as_variant!(Value::Bytes(v) => v))
+        })?;
+
+        if v.bytes_has_escapes() {
+            let unescape = core::mem::replace(&mut self.unescape, &mut []);
+            let (unescape, v) = v.unescape_bytes(unescape)?;
+            self.unescape = unescape;
+            visitor.visit_borrowed_bytes(v)
+        } else {
+            visitor.visit_borrowed_bytes(*v)
+        }
     }
 
-    fn deserialize_byte_buf<V>(self, _visitor: V) -> Result<V::Value, Self::Error>
+    fn deserialize_byte_buf<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: de::Visitor<'de>,
     {
-        Err(Error::NotImplemented("bytes"))
+        self.deserialize_bytes(visitor)
     }
 
     fn deserialize_option<V>(self, visitor: V) -> Result<V::Value, Self::Error>
