@@ -41,8 +41,7 @@ impl<'de> From<Located<'de, TokenError>> for Located<'de, ParseError> {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Clone, Copy, Default)]
 pub struct ParserState(State);
 
 impl ParserState {
