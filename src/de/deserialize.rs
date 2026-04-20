@@ -124,7 +124,7 @@ enum Flag {
 pub struct Deserializer<'de, S> {
     parser: Parser<'de, S>,
     peeked: Option<Event<'de>>,
-    location: Located<'de, ()>,
+    last_event_location: Located<'de, ()>,
     unescape: &'de mut [u8],
     flag: Option<Flag>,
 }
@@ -135,7 +135,7 @@ where
 {
     pub fn from_parser(parser: Parser<'de, S>, unescape: &'de mut [u8]) -> Self {
         Self {
-            location: parser.location().clone(),
+            last_event_location: parser.location().clone(),
             parser: parser,
             peeked: None,
             unescape,
@@ -160,7 +160,7 @@ where
             result = Err(Error::UnusedInput);
         }
 
-        self.location.wrap(result).to_result().map(|r| r.value)
+        result.map_err(|e| self.last_event_location.wrap(e))
     }
 }
 
@@ -185,6 +185,11 @@ trait SmallishDe<'de>: de::Deserializer<'de, Error = Error> {
     #[inline]
     fn location(self) -> Located<'de, ()> {
         self.base().location()
+    }
+
+    #[inline]
+    fn error_without_event<T>(self, err: Error) -> Result<T, Error> {
+        self.base().error_without_event(err)
     }
 
     #[inline]
@@ -217,7 +222,7 @@ where
 
         let next = self.parser.next();
         let (loc, ev) = Located::from_result(next).split();
-        self.location = loc;
+        self.last_event_location = loc;
 
         let ev = ev?;
         self.flag = None;
@@ -231,7 +236,7 @@ where
 
         let next = self.parser.next();
         let (loc, ev) = Located::from_result(next).split();
-        self.location = loc;
+        self.last_event_location = loc;
 
         let ev = ev?;
         self.peeked = Some(ev.clone());
@@ -247,6 +252,12 @@ where
     #[inline]
     fn location(self) -> Located<'de, ()> {
         *self.parser.location()
+    }
+
+    #[inline]
+    fn error_without_event<T>(self, err: Error) -> Result<T, Error> {
+        self.last_event_location = self.location();
+        Err(err)
     }
 }
 
@@ -969,8 +980,7 @@ where
     where
         V: de::Visitor<'de>,
     {
-        self.de.next()?;
-        Err(Error::InvalidType)
+        self.de.error_without_event(Error::InvalidType)
     }
 
     serde::forward_to_deserialize_any! {
@@ -986,8 +996,7 @@ where
         if let Some(src) = self.location.source {
             visitor.visit_borrowed_bytes(src)
         } else {
-            self.de.next()?;
-            Err(Error::InvalidType)
+            self.de.error_without_event(Error::InvalidType)
         }
     }
 
