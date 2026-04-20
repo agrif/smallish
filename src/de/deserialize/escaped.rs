@@ -50,13 +50,15 @@ where
 
     fn deserialize_newtype_struct<V>(
         self,
-        _name: &'static str,
+        name: &'static str,
         visitor: V,
     ) -> Result<V::Value, Self::Error>
     where
         V: de::Visitor<'de>,
     {
-        visitor.visit_newtype_struct(self)
+        self.hook_special(name, visitor, |de, visitor| {
+            visitor.visit_newtype_struct(de)
+        })
     }
 
     fn deserialize_str<V>(self, visitor: V) -> Result<V::Value, Self::Error>
