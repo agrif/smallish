@@ -746,10 +746,7 @@ macro_rules! forward_to_inner_deserialize {
         }
     };
     (@helper, newtype_struct<$l:tt, $v:ident>) => {
-        forward_to_inner_deserialize! {
-            @method,
-            newtype_struct<$l, $v>(name: &'static str)
-        }
+        compile_error!("forwarding to inner for newtype_struct is almost always incorrect")
     };
     (@helper, tuple<$l:tt, $v:ident>) => {
         forward_to_inner_deserialize! {
