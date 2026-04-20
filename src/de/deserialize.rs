@@ -702,7 +702,11 @@ macro_rules! forward_to_inner_deserialize {
     (@method, $func:ident<$l:tt, $v:ident>($($arg:ident : $ty:ty),*)) => {
         paste::paste! {
             #[inline]
-            fn [<deserialize_ $func>]<$v>(self, $($arg: $ty,)* visitor: $v) -> Result<$v::Value, Self::Error>
+            fn [<deserialize_ $func>]<$v>(
+                self,
+                $($arg: $ty,)*
+                visitor: $v,
+            ) -> Result<$v::Value, Self::Error>
             where
                 $v: ::serde::de::Visitor<$l>,
             {
@@ -713,22 +717,40 @@ macro_rules! forward_to_inner_deserialize {
 
     // build one method, dispatching on type
     (@helper, unit_struct<$l:tt, $v:ident>) => {
-        forward_to_inner_deserialize! { @method, unit_struct<$l, $v>(name: &'static str) }
+        forward_to_inner_deserialize! {
+            @method,
+            unit_struct<$l, $v>(name: &'static str)
+        }
     };
     (@helper, newtype_struct<$l:tt, $v:ident>) => {
-        forward_to_inner_deserialize! { @method, newtype_struct<$l, $v>(name: &'static str) }
+        forward_to_inner_deserialize! {
+            @method,
+            newtype_struct<$l, $v>(name: &'static str)
+        }
     };
     (@helper, tuple<$l:tt, $v:ident>) => {
-        forward_to_inner_deserialize! { @method, tuple<$l, $v>(len: usize) }
+        forward_to_inner_deserialize! {
+            @method,
+            tuple<$l, $v>(len: usize)
+        }
     };
     (@helper, tuple_struct<$l:tt, $v:ident>) => {
-        forward_to_inner_deserialize! { @method, tuple_struct<$l, $v>(name: &'static str, len: usize) }
+        forward_to_inner_deserialize! {
+            @method,
+            tuple_struct<$l, $v>(name: &'static str, len: usize)
+        }
     };
     (@helper, struct<$l:tt, $v:ident>) => {
-        forward_to_inner_deserialize! { @method, struct<$l, $v>(name: &'static str, fields: &'static [&'static str]) }
+        forward_to_inner_deserialize! {
+            @method,
+            struct<$l, $v>(name: &'static str, fields: &'static [&'static str])
+        }
     };
     (@helper, enum<$l:tt, $v:ident>) => {
-        forward_to_inner_deserialize! { @method, enum<$l, $v>(name: &'static str, variants: &'static [&'static str]) }
+        forward_to_inner_deserialize! {
+            @method,
+            enum<$l, $v>(name: &'static str, variants: &'static [&'static str])
+        }
     };
 
     // generic helper that only accepts visitor
