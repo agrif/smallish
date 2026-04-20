@@ -12,6 +12,7 @@ enum Instruction<'a> {
     #[serde(borrow)]
     SetOptions(smallish::types::Located<'a, Options<'a>>),
     NewtypeTuple(((u8, u8), smallish::types::Located<'a, char>)),
+    NewtypeOpt(Option<(u8, u8, u8)>),
     Nop,
 }
 
@@ -59,6 +60,8 @@ SetOptions foo={flag=false} bar="bar" madeup={this=2}
 SetOptions bar="hello\nworld" baz=b"\n\n"
 NewtypeTuple [0, 1] '\u{1f914}'
 NewtypeTuple [0, 1] '🤔'
+NewtypeOpt null
+NewtypeOpt [0, 1, 2]
 "#;
 
 fn main() {

@@ -10,13 +10,8 @@ mod error;
 pub use error::Error;
 
 mod escaped;
+mod inline;
 mod located;
-
-#[derive(Clone, Copy, Debug)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-enum Flag {
-    NewtypeEnum,
-}
 
 #[derive(Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
@@ -25,7 +20,6 @@ pub struct Deserializer<'de, S> {
     peeked: Option<Event<'de>>,
     last_event_location: Located<'de, ()>,
     unescape: &'de mut [u8],
-    flag: Option<Flag>,
 }
 
 impl<'de, S> Deserializer<'de, S>
@@ -38,7 +32,6 @@ where
             parser: parser,
             peeked: None,
             unescape,
-            flag: None,
         }
     }
 
@@ -144,7 +137,6 @@ where
 
     fn next(self) -> Result<Event<'de>, Error> {
         if let Some(ev) = self.peeked.take() {
-            self.flag = None;
             return Ok(ev);
         }
 
@@ -153,7 +145,6 @@ where
         self.last_event_location = loc;
 
         let ev = ev?;
-        self.flag = None;
         Ok(ev)
     }
 
@@ -173,7 +164,6 @@ where
 
     #[inline]
     fn consume(self) {
-        self.flag = None;
         self.peeked = None;
     }
 
@@ -203,15 +193,6 @@ where
     where
         V: de::Visitor<'de>,
     {
-        if let Some(Flag::NewtypeEnum) = self.flag {
-            return match self.peek()? {
-                Event::Key(_) => self.deserialize_map(visitor),
-                _ => self.deserialize_seq(visitor),
-            };
-        }
-
-        self.flag = None;
-
         match self.peek()? {
             Event::ListOpen => self.deserialize_seq(visitor),
             Event::MapOpen => self.deserialize_map(visitor),
@@ -482,15 +463,10 @@ where
     where
         V: de::Visitor<'de>,
     {
-        if let Some(Flag::NewtypeEnum) = self.flag {
-            self.flag = None;
-            visitor.visit_seq(Access::new(self))
-        } else {
-            self.next_with(as_variant!(Event::ListOpen => ()))?;
-            let v = visitor.visit_seq(Access::new(self))?;
-            self.next_with(as_variant!(Event::ListClose => ()))?;
-            Ok(v)
-        }
+        self.next_with(as_variant!(Event::ListOpen => ()))?;
+        let v = visitor.visit_seq(Access::new(self))?;
+        self.next_with(as_variant!(Event::ListClose => ()))?;
+        Ok(v)
     }
 
     fn deserialize_tuple<V>(self, _len: usize, visitor: V) -> Result<V::Value, Self::Error>
@@ -516,15 +492,10 @@ where
     where
         V: de::Visitor<'de>,
     {
-        if let Some(Flag::NewtypeEnum) = self.flag {
-            self.flag = None;
-            visitor.visit_map(Access::new(self))
-        } else {
-            self.next_with(as_variant!(Event::MapOpen => ()))?;
-            let v = visitor.visit_map(Access::new(self))?;
-            self.next_with(as_variant!(Event::MapClose => ()))?;
-            Ok(v)
-        }
+        self.next_with(as_variant!(Event::MapOpen => ()))?;
+        let v = visitor.visit_map(Access::new(self))?;
+        self.next_with(as_variant!(Event::MapClose => ()))?;
+        Ok(v)
     }
 
     fn deserialize_struct<V>(
@@ -668,8 +639,7 @@ where
     where
         T: de::DeserializeSeed<'de>,
     {
-        self.de.flag = Some(Flag::NewtypeEnum);
-        seed.deserialize(&mut *self.de)
+        seed.deserialize(&mut inline::InlineHandler::new(&mut *self.de))
     }
 
     fn tuple_variant<V>(self, _len: usize, visitor: V) -> Result<V::Value, Self::Error>
