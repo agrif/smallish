@@ -251,7 +251,11 @@ where
 
     #[inline]
     fn location(self) -> Located<'de, ()> {
-        *self.parser.location()
+        if self.peeked.is_some() {
+            self.last_event_location
+        } else {
+            *self.parser.location()
+        }
     }
 
     #[inline]
