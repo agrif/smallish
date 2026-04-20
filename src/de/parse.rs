@@ -65,7 +65,7 @@ enum State {
     ValueClose,
     FieldEquals,
     FieldValue,
-    FieldBareEnum,
+    BareEnum,
     ListItem,
     ListSep,
     MapItem,
@@ -80,7 +80,7 @@ pub struct Parser<'de, S> {
     initial_state: State,
     state: S,
     state_top: usize,
-    unused_token: Option<LocResult<'de, Token<'de>, TokenError>>,
+    unused_token: Option<Located<'de, Token<'de>>>,
     initial_state_sent: bool,
 }
 
@@ -243,8 +243,8 @@ where
                     // careful: enum parents can only support bare enums here
                     // but full enums are okay in maps
                     if matches!(self.state(), State::Enum) {
-                        self.push(State::FieldBareEnum)?;
-                        self.unused_token = Some(Ok(loc.wrap(tok)));
+                        self.push(State::BareEnum)?;
+                        self.unused_token = Some(loc.wrap(tok));
                     } else {
                         self.push(State::Enum)?;
                     }
@@ -257,7 +257,7 @@ where
                 t => self.unexpected(t, &[ParenOpen, ListOpen, MapOpen, Ident, Value]),
             },
 
-            State::FieldBareEnum => match tok {
+            State::BareEnum => match tok {
                 Token::Ident(_name) => {
                     self.pop()?;
                     Ok(Some(Event::EnumClose))
@@ -348,7 +348,7 @@ where
                 | Token::ListClose
                 | Token::MapClose => {
                     self.pop()?;
-                    self.unused_token = Some(Ok(loc.wrap(tok)));
+                    self.unused_token = Some(loc.wrap(tok));
                     Ok(Some(Event::EnumClose))
                 }
                 Token::ParenOpen => {
@@ -363,10 +363,19 @@ where
                     self.push(State::MapItem)?;
                     Ok(Some(Event::MapOpen))
                 }
-                Token::Ident(name) => {
-                    self.push(State::FieldEquals)?;
-                    Ok(Some(Event::Key(name)))
-                }
+                Token::Ident(name) => match Located::from_result(self.tokens.peek()).split().1? {
+                    // careful: ident might be a bare enum in enum context,
+                    // so look for equals
+                    Token::Equals => {
+                        self.push(State::FieldEquals)?;
+                        Ok(Some(Event::Key(name)))
+                    }
+                    _ => {
+                        self.push(State::BareEnum)?;
+                        self.unused_token = Some(loc.wrap(tok));
+                        Ok(Some(Event::EnumOpen(name)))
+                    }
+                },
                 Token::Value(v) => Ok(Some(Event::Value(v))),
                 t => self.unexpected(
                     t,
@@ -395,7 +404,7 @@ where
 
         loop {
             let tok = if let Some(tok) = self.unused_token.take() {
-                tok
+                Ok(tok)
             } else {
                 self.tokens.next()
             };
@@ -410,10 +419,7 @@ where
                                 Ok(Event::EnumClose)
                             }
                             Some(state)
-                                if matches!(
-                                    state,
-                                    State::FieldEquals | State::FieldValue | State::FieldBareEnum
-                                ) =>
+                                if matches!(state, State::FieldEquals | State::FieldValue) =>
                             {
                                 Err(ParseError::IncompleteField)
                             }

@@ -13,6 +13,7 @@ enum Instruction<'a> {
     SetOptions(smallish::types::Located<'a, Options<'a>>),
     NewtypeTuple(((u8, u8), smallish::types::Located<'a, char>)),
     NewtypeOpt(Option<(u8, u8, u8)>),
+    List(Vec<Direction>),
     Nop,
 }
 
@@ -60,6 +61,7 @@ SetOptions foo={flag=false} bar="bar" madeup={this=2}
 SetOptions bar="hello\nworld" baz=b"\n\n"
 NewtypeTuple [0, 1] '\u{1f914}'
 NewtypeTuple [0, 1] '🤔'
+List North South (Turnwise 2)
 NewtypeOpt null
 NewtypeOpt [0, 1, 2]
 "#;
