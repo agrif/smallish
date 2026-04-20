@@ -162,8 +162,54 @@ where
 
         self.location.wrap(result).to_result().map(|r| r.value)
     }
+}
 
-    fn next(&mut self) -> Result<Event<'de>, Error> {
+trait SmallishDe<'de>: de::Deserializer<'de, Error = Error> {
+    fn base(self) -> impl SmallishDe<'de>;
+
+    #[inline]
+    fn next(self) -> Result<Event<'de>, Error> {
+        self.base().next()
+    }
+
+    #[inline]
+    fn peek(self) -> Result<Event<'de>, Error> {
+        self.base().peek()
+    }
+
+    #[inline]
+    fn consume(self) {
+        self.base().consume()
+    }
+
+    #[inline]
+    fn location(self) -> Located<'de, ()> {
+        self.base().location()
+    }
+
+    #[inline]
+    fn next_with<T>(self, f: impl FnOnce(Event<'de>) -> Option<T>) -> Result<T, Error> {
+        let ev = self.next()?;
+        f(ev).ok_or(Error::InvalidType)
+    }
+
+    #[inline]
+    fn peek_with<T>(self, f: impl FnOnce(Event<'de>) -> Option<T>) -> Result<Option<T>, Error> {
+        let ev = self.peek()?;
+        Ok(f(ev))
+    }
+}
+
+impl<'de, S> SmallishDe<'de> for &mut Deserializer<'de, S>
+where
+    S: AsRef<[ParserState]> + AsMut<[ParserState]>,
+{
+    #[inline]
+    fn base(self) -> impl SmallishDe<'de> {
+        self
+    }
+
+    fn next(self) -> Result<Event<'de>, Error> {
         if let Some(ev) = self.peeked.take() {
             self.flag = None;
             return Ok(ev);
@@ -178,7 +224,7 @@ where
         Ok(ev)
     }
 
-    fn peek(&mut self) -> Result<Event<'de>, Error> {
+    fn peek(self) -> Result<Event<'de>, Error> {
         if let Some(ev) = &self.peeked {
             return Ok(ev.clone());
         }
@@ -192,22 +238,15 @@ where
         Ok(ev)
     }
 
-    fn next_with<T>(&mut self, f: impl FnOnce(Event<'de>) -> Option<T>) -> Result<T, Error> {
-        let ev = self.next()?;
-        f(ev).ok_or(Error::InvalidType)
-    }
-
-    fn peek_with<T>(
-        &mut self,
-        f: impl FnOnce(Event<'de>) -> Option<T>,
-    ) -> Result<Option<T>, Error> {
-        let ev = self.peek()?;
-        Ok(f(ev))
-    }
-
-    fn consume(&mut self) {
+    #[inline]
+    fn consume(self) {
         self.flag = None;
         self.peeked = None;
+    }
+
+    #[inline]
+    fn location(self) -> Located<'de, ()> {
+        *self.parser.location()
     }
 }
 
@@ -557,7 +596,7 @@ where
         V: de::Visitor<'de>,
     {
         if name == Located::SERDE_NAME {
-            return visitor.visit_map(LocatedAccess::new(self));
+            return visitor.visit_map(LocatedAccess::new(self.location(), self));
         }
 
         self.deserialize_map(visitor)
@@ -794,19 +833,28 @@ where
 
 #[derive(Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-struct EscapedAccess<'a, 'de: 'a, S> {
-    de: &'a mut Deserializer<'de, S>,
+struct EscapedAccess<'a, De> {
+    de: &'a mut De,
 }
 
-impl<'a, 'de, S> EscapedAccess<'a, 'de, S> {
-    fn new(de: &'a mut Deserializer<'de, S>) -> Self {
+impl<'a, De> EscapedAccess<'a, De> {
+    fn new(de: &'a mut De) -> Self {
         Self { de }
     }
 }
 
-impl<'a, 'b, 'de, S> de::Deserializer<'de> for &'a mut EscapedAccess<'b, 'de, S>
+impl<'a, 'de, De> SmallishDe<'de> for &mut EscapedAccess<'a, De>
 where
-    S: AsRef<[ParserState]> + AsMut<[ParserState]>,
+    for<'b> &'b mut De: SmallishDe<'de>,
+{
+    fn base(self) -> impl SmallishDe<'de> {
+        self.de.base()
+    }
+}
+
+impl<'a, 'de, De> de::Deserializer<'de> for &mut EscapedAccess<'a, De>
+where
+    for<'b> &'b mut De: SmallishDe<'de>,
 {
     type Error = Error;
 
@@ -875,9 +923,9 @@ where
 
 #[derive(Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-struct LocatedAccess<'a, 'de: 'a, S> {
+struct LocatedAccess<'a, 'de, De> {
     location: Located<'de, ()>,
-    de: &'a mut Deserializer<'de, S>,
+    de: &'a mut De,
     state: LocatedState,
 }
 
@@ -892,22 +940,28 @@ enum LocatedState {
     End,
 }
 
-impl<'a, 'de, S> LocatedAccess<'a, 'de, S>
-where
-    S: AsRef<[ParserState]> + AsMut<[ParserState]>,
-{
-    fn new(de: &'a mut Deserializer<'de, S>) -> Self {
+impl<'a, 'de, De> LocatedAccess<'a, 'de, De> {
+    fn new(location: Located<'de, ()>, de: &'a mut De) -> Self {
         Self {
-            location: *de.parser.location(),
+            location,
             de,
             state: LocatedState::Source,
         }
     }
 }
 
-impl<'a, 'b, 'de, S> de::Deserializer<'de> for &'a mut LocatedAccess<'b, 'de, S>
+impl<'a, 'de, De> SmallishDe<'de> for &mut LocatedAccess<'a, 'de, De>
 where
-    S: AsRef<[ParserState]> + AsMut<[ParserState]>,
+    for<'b> &'b mut De: SmallishDe<'de>,
+{
+    fn base(self) -> impl SmallishDe<'de> {
+        self.de.base()
+    }
+}
+
+impl<'a, 'de, De> de::Deserializer<'de> for &mut LocatedAccess<'a, 'de, De>
+where
+    for<'b> &'b mut De: SmallishDe<'de>,
 {
     type Error = Error;
 
@@ -957,9 +1011,9 @@ where
     }
 }
 
-impl<'a, 'de, S> de::MapAccess<'de> for LocatedAccess<'a, 'de, S>
+impl<'a, 'de, De> de::MapAccess<'de> for LocatedAccess<'a, 'de, De>
 where
-    S: AsRef<[ParserState]> + AsMut<[ParserState]>,
+    for<'b> &'b mut De: SmallishDe<'de>,
 {
     type Error = Error;
 
