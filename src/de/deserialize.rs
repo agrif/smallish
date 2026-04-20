@@ -1,117 +1,16 @@
 use as_variant::as_variant;
 use serde::de;
 
-use super::{ParseError, Parser, ParserState};
-use crate::syntax::{Event, Float, Integer, Value};
-use crate::types::{Escaped, Located, UnescapeError};
+use crate::de::{Parser, ParserState};
+use crate::syntax::{Event, Value};
+use crate::types::{Escaped, Located};
 use crate::Flavor;
 
-#[derive(Clone, Debug, thiserror::Error)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub enum Error {
-    #[error("parse error: {0}")]
-    Parse(#[from] ParseError),
-    #[error("unused input at end")]
-    UnusedInput,
-    #[error("not implemented: {0}")]
-    NotImplemented(&'static str),
-    #[error("integer out of range: {0}")]
-    IntegerRange(Integer),
-    #[error("float out of range: {0}")]
-    FloatRange(Float),
-    #[error("unescape buffer full")]
-    BufferFull,
+mod error;
+pub use error::Error;
 
-    #[cfg(feature = "custom-error-messages")]
-    #[error("{0}")]
-    Custom(heapless::String<64>),
-
-    #[cfg(not(feature = "custom-error-messages"))]
-    #[error("serde error")]
-    Custom,
-
-    #[error("invalid type")]
-    InvalidType,
-    #[error("invalid value")]
-    InvalidValue,
-    #[error("invalid length: {0}")]
-    InvalidLength(usize),
-    #[error("unknown variant: expected {0:?}")]
-    UnknownVariant(&'static [&'static str]),
-    #[error("unknown field: expected {0:?}")]
-    UnknownField(&'static [&'static str]),
-    #[error("missing field: {0}")]
-    MissingField(&'static str),
-    #[error("duplicate field: {0}")]
-    DuplicateField(&'static str),
-}
-
-impl<'de> From<Located<'de, ParseError>> for Located<'de, Error> {
-    fn from(other: Located<'de, ParseError>) -> Self {
-        other.map(Into::into)
-    }
-}
-
-impl From<UnescapeError> for Error {
-    fn from(other: UnescapeError) -> Self {
-        match other {
-            UnescapeError::BadLiteral(e) => Error::Parse(e.into()),
-            UnescapeError::BufferFull => Error::BufferFull,
-        }
-    }
-}
-
-impl de::Error for Error {
-    #[cfg(feature = "custom-error-messages")]
-    fn custom<T>(msg: T) -> Self
-    where
-        T: core::fmt::Display,
-    {
-        use core::fmt::Write;
-        let mut s = heapless::String::new();
-        if write!(&mut s, "{}", msg).is_err() {
-            s.clear();
-            let _ = s.push_str("<too large for buffer>");
-        }
-        Self::Custom(s)
-    }
-
-    #[cfg(not(feature = "custom-error-messages"))]
-    fn custom<T>(_msg: T) -> Self
-    where
-        T: core::fmt::Display,
-    {
-        Self::Custom
-    }
-
-    fn invalid_type(_unexp: de::Unexpected<'_>, _exp: &dyn de::Expected) -> Self {
-        Self::InvalidType
-    }
-
-    fn invalid_value(_unexp: de::Unexpected<'_>, _exp: &dyn de::Expected) -> Self {
-        Self::InvalidValue
-    }
-
-    fn invalid_length(len: usize, _exp: &dyn de::Expected) -> Self {
-        Self::InvalidLength(len)
-    }
-
-    fn unknown_variant(_variant: &str, expected: &'static [&'static str]) -> Self {
-        Self::UnknownVariant(expected)
-    }
-
-    fn unknown_field(_field: &str, expected: &'static [&'static str]) -> Self {
-        Self::UnknownField(expected)
-    }
-
-    fn missing_field(field: &'static str) -> Self {
-        Self::MissingField(field)
-    }
-
-    fn duplicate_field(field: &'static str) -> Self {
-        Self::DuplicateField(field)
-    }
-}
+mod escaped;
+mod located;
 
 #[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
@@ -546,7 +445,7 @@ where
         V: de::Visitor<'de>,
     {
         if name == Escaped::<()>::SERDE_NAME {
-            visitor.visit_newtype_struct(&mut EscapedAccess::new(self))
+            visitor.visit_newtype_struct(&mut escaped::EscapedHandler::new(self))
         } else {
             visitor.visit_newtype_struct(self)
         }
@@ -611,7 +510,7 @@ where
         V: de::Visitor<'de>,
     {
         if name == Located::SERDE_NAME {
-            return visitor.visit_map(LocatedAccess::new(self.location(), self));
+            return visitor.visit_map(located::LocatedHandler::new(self.location(), self));
         }
 
         self.deserialize_map(visitor)
@@ -678,56 +577,6 @@ where
 
         visitor.visit_unit()
     }
-}
-
-// helper to forward to self.de, in the same style as
-// serde::forward_to_deserialize_any!
-macro_rules! forward_to_inner_deserialize {
-    // build one method, with arguments
-    (@method, $func:ident<$l:tt, $v:ident>($($arg:ident : $ty:ty),*)) => {
-        paste::paste! {
-            #[inline]
-            fn [<deserialize_ $func>]<$v>(self, $($arg: $ty,)* visitor: $v) -> Result<$v::Value, Self::Error>
-            where
-                $v: ::serde::de::Visitor<$l>,
-            {
-                self.de.[<deserialize_ $func>]($($arg,)* visitor)
-            }
-        }
-    };
-
-    // build one method, dispatching on type
-    (@helper, unit_struct<$l:tt, $v:ident>) => {
-        forward_to_inner_deserialize! { @method, unit_struct<$l, $v>(name: &'static str) }
-    };
-    (@helper, newtype_struct<$l:tt, $v:ident>) => {
-        forward_to_inner_deserialize! { @method, newtype_struct<$l, $v>(name: &'static str) }
-    };
-    (@helper, tuple<$l:tt, $v:ident>) => {
-        forward_to_inner_deserialize! { @method, tuple<$l, $v>(len: usize) }
-    };
-    (@helper, tuple_struct<$l:tt, $v:ident>) => {
-        forward_to_inner_deserialize! { @method, tuple_struct<$l, $v>(name: &'static str, len: usize) }
-    };
-    (@helper, struct<$l:tt, $v:ident>) => {
-        forward_to_inner_deserialize! { @method, struct<$l, $v>(name: &'static str, fields: &'static [&'static str]) }
-    };
-    (@helper, enum<$l:tt, $v:ident>) => {
-        forward_to_inner_deserialize! { @method, enum<$l, $v>(name: &'static str, variants: &'static [&'static str]) }
-    };
-
-    // generic helper that only accepts visitor
-    (@helper, $func:ident<$l:tt, $v:ident>) => {
-        forward_to_inner_deserialize! { @method, $func<$l, $v>() }
-    };
-
-    // entry points
-    (<$visitor:ident : Visitor<$lifetime:tt>> $($func:ident)*) => {
-        $(forward_to_inner_deserialize! { @helper, $func<$lifetime, $visitor> })*
-    };
-    ($($func:ident)*) => {
-        forward_to_inner_deserialize! { <V: Visitor<'de>> $($func)* }
-    };
 }
 
 #[derive(Debug)]
@@ -846,240 +695,54 @@ where
     }
 }
 
-#[derive(Debug)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-struct EscapedAccess<'a, De> {
-    de: &'a mut De,
-}
-
-impl<'a, De> EscapedAccess<'a, De> {
-    fn new(de: &'a mut De) -> Self {
-        Self { de }
-    }
-}
-
-impl<'a, 'de, De> SmallishDe<'de> for &mut EscapedAccess<'a, De>
-where
-    for<'b> &'b mut De: SmallishDe<'de>,
-{
-    fn base(self) -> impl SmallishDe<'de> {
-        self.de.base()
-    }
-}
-
-impl<'a, 'de, De> de::Deserializer<'de> for &mut EscapedAccess<'a, De>
-where
-    for<'b> &'b mut De: SmallishDe<'de>,
-{
-    type Error = Error;
-
-    forward_to_inner_deserialize! {
-        bool i8 i16 i32 i64 i128 u8 u16 u32 u64 u128 f32 f64 char
-        option unit unit_struct seq tuple
-        tuple_struct map struct enum identifier ignored_any
-    }
-
-    fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>
-    where
-        V: de::Visitor<'de>,
-    {
-        match self.de.peek()? {
-            Event::Value(Value::String(_)) => self.deserialize_str(visitor),
-            Event::Value(Value::Bytes(_)) => self.deserialize_bytes(visitor),
-            _ => self.de.deserialize_any(visitor),
-        }
-    }
-
-    fn deserialize_newtype_struct<V>(
-        self,
-        _name: &'static str,
-        visitor: V,
-    ) -> Result<V::Value, Self::Error>
-    where
-        V: de::Visitor<'de>,
-    {
-        visitor.visit_newtype_struct(self)
-    }
-
-    fn deserialize_str<V>(self, visitor: V) -> Result<V::Value, Self::Error>
-    where
-        V: de::Visitor<'de>,
-    {
-        let v = self.de.next_with(|t| {
-            as_variant!(t, Event::Value).and_then(as_variant!(Value::String(v) => v))
-        })?;
-        visitor.visit_borrowed_str(*v)
-    }
-
-    fn deserialize_string<V>(self, visitor: V) -> Result<V::Value, Self::Error>
-    where
-        V: de::Visitor<'de>,
-    {
-        self.deserialize_str(visitor)
-    }
-
-    fn deserialize_bytes<V>(self, visitor: V) -> Result<V::Value, Self::Error>
-    where
-        V: de::Visitor<'de>,
-    {
-        let v = self.de.next_with(|t| {
-            as_variant!(t, Event::Value).and_then(as_variant!(Value::Bytes(v) => v))
-        })?;
-        visitor.visit_borrowed_bytes(*v)
-    }
-
-    fn deserialize_byte_buf<V>(self, visitor: V) -> Result<V::Value, Self::Error>
-    where
-        V: de::Visitor<'de>,
-    {
-        self.deserialize_bytes(visitor)
-    }
-}
-
-#[derive(Debug)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-struct LocatedAccess<'a, 'de, De> {
-    location: Located<'de, ()>,
-    de: &'a mut De,
-    state: LocatedState,
-}
-
-#[derive(Clone, Copy, Debug)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-enum LocatedState {
-    Source,
-    Line,
-    Column,
-    Offset,
-    Value,
-    End,
-}
-
-impl<'a, 'de, De> LocatedAccess<'a, 'de, De> {
-    fn new(location: Located<'de, ()>, de: &'a mut De) -> Self {
-        Self {
-            location,
-            de,
-            state: LocatedState::Source,
-        }
-    }
-}
-
-impl<'a, 'de, De> SmallishDe<'de> for &mut LocatedAccess<'a, 'de, De>
-where
-    for<'b> &'b mut De: SmallishDe<'de>,
-{
-    fn base(self) -> impl SmallishDe<'de> {
-        self.de.base()
-    }
-}
-
-impl<'a, 'de, De> de::Deserializer<'de> for &mut LocatedAccess<'a, 'de, De>
-where
-    for<'b> &'b mut De: SmallishDe<'de>,
-{
-    type Error = Error;
-
-    fn deserialize_any<V>(self, _visitor: V) -> Result<V::Value, Self::Error>
-    where
-        V: de::Visitor<'de>,
-    {
-        self.de.error_without_event(Error::InvalidType)
-    }
-
-    serde::forward_to_deserialize_any! {
-        bool i8 i16 i32 i64 i128 u8 u16 u32 u64 u128 f32 f64 char str string
-        unit unit_struct newtype_struct seq tuple
-        tuple_struct map struct enum identifier ignored_any
-    }
-
-    fn deserialize_bytes<V>(self, visitor: V) -> Result<V::Value, Self::Error>
-    where
-        V: de::Visitor<'de>,
-    {
-        if let Some(src) = self.location.source {
-            visitor.visit_borrowed_bytes(src)
-        } else {
-            self.de.error_without_event(Error::InvalidType)
-        }
-    }
-
-    fn deserialize_byte_buf<V>(self, visitor: V) -> Result<V::Value, Self::Error>
-    where
-        V: de::Visitor<'de>,
-    {
-        self.deserialize_bytes(visitor)
-    }
-
-    fn deserialize_option<V>(self, visitor: V) -> Result<V::Value, Self::Error>
-    where
-        V: de::Visitor<'de>,
-    {
-        // only called on Option<&'de [u8]> for source
-        if let Some(_) = self.location.source {
-            visitor.visit_some(self)
-        } else {
-            visitor.visit_none()
-        }
-    }
-}
-
-impl<'a, 'de, De> de::MapAccess<'de> for LocatedAccess<'a, 'de, De>
-where
-    for<'b> &'b mut De: SmallishDe<'de>,
-{
-    type Error = Error;
-
-    fn next_key_seed<K>(&mut self, seed: K) -> Result<Option<K::Value>, Self::Error>
-    where
-        K: de::DeserializeSeed<'de>,
-    {
-        let key = match self.state {
-            LocatedState::Source => "source",
-            LocatedState::Line => "line",
-            LocatedState::Column => "column",
-            LocatedState::Offset => "offset",
-            LocatedState::Value => "value",
-            LocatedState::End => {
-                return Ok(None);
-            }
-        };
-
-        let de = de::value::BorrowedStrDeserializer::new(key);
-        seed.deserialize(de).map(Some)
-    }
-
-    fn next_value_seed<V>(&mut self, seed: V) -> Result<V::Value, Self::Error>
-    where
-        V: de::DeserializeSeed<'de>,
-    {
-        match self.state {
-            LocatedState::Source => {
-                self.state = LocatedState::Line;
-                seed.deserialize(self)
-            }
-            LocatedState::Line => {
-                self.state = LocatedState::Column;
-                let de = de::value::UsizeDeserializer::new(self.location.line);
-                seed.deserialize(de)
-            }
-            LocatedState::Column => {
-                self.state = LocatedState::Offset;
-                let de = de::value::UsizeDeserializer::new(self.location.column);
-                seed.deserialize(de)
-            }
-            LocatedState::Offset => {
-                self.state = LocatedState::Value;
-                let de = de::value::UsizeDeserializer::new(self.location.offset);
-                seed.deserialize(de)
-            }
-            LocatedState::Value => {
-                self.state = LocatedState::End;
-                seed.deserialize(&mut *self.de)
-            }
-            LocatedState::End => {
-                unreachable!();
+// helper to forward to self.de, in the same style as
+// serde::forward_to_deserialize_any!
+macro_rules! forward_to_inner_deserialize {
+    // build one method, with arguments
+    (@method, $func:ident<$l:tt, $v:ident>($($arg:ident : $ty:ty),*)) => {
+        paste::paste! {
+            #[inline]
+            fn [<deserialize_ $func>]<$v>(self, $($arg: $ty,)* visitor: $v) -> Result<$v::Value, Self::Error>
+            where
+                $v: ::serde::de::Visitor<$l>,
+            {
+                self.de.[<deserialize_ $func>]($($arg,)* visitor)
             }
         }
-    }
+    };
+
+    // build one method, dispatching on type
+    (@helper, unit_struct<$l:tt, $v:ident>) => {
+        forward_to_inner_deserialize! { @method, unit_struct<$l, $v>(name: &'static str) }
+    };
+    (@helper, newtype_struct<$l:tt, $v:ident>) => {
+        forward_to_inner_deserialize! { @method, newtype_struct<$l, $v>(name: &'static str) }
+    };
+    (@helper, tuple<$l:tt, $v:ident>) => {
+        forward_to_inner_deserialize! { @method, tuple<$l, $v>(len: usize) }
+    };
+    (@helper, tuple_struct<$l:tt, $v:ident>) => {
+        forward_to_inner_deserialize! { @method, tuple_struct<$l, $v>(name: &'static str, len: usize) }
+    };
+    (@helper, struct<$l:tt, $v:ident>) => {
+        forward_to_inner_deserialize! { @method, struct<$l, $v>(name: &'static str, fields: &'static [&'static str]) }
+    };
+    (@helper, enum<$l:tt, $v:ident>) => {
+        forward_to_inner_deserialize! { @method, enum<$l, $v>(name: &'static str, variants: &'static [&'static str]) }
+    };
+
+    // generic helper that only accepts visitor
+    (@helper, $func:ident<$l:tt, $v:ident>) => {
+        forward_to_inner_deserialize! { @method, $func<$l, $v>() }
+    };
+
+    // entry points
+    (<$visitor:ident : Visitor<$lifetime:tt>> $($func:ident)*) => {
+        $(forward_to_inner_deserialize! { @helper, $func<$lifetime, $visitor> })*
+    };
+    ($($func:ident)*) => {
+        forward_to_inner_deserialize! { <V: Visitor<'de>> $($func)* }
+    };
 }
+
+pub(crate) use forward_to_inner_deserialize;
