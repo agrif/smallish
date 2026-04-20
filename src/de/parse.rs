@@ -73,7 +73,7 @@ enum State {
     Enum,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Parser<'de, S> {
     tokens: Tokenizer<'de>,
@@ -447,6 +447,21 @@ where
                 Ok(Some(ev)) => return loc.replace(Ok(ev)).to_result(),
                 Err(e) => return loc.replace(Err(e)).to_result(),
             }
+        }
+    }
+}
+
+impl<'de, S> Iterator for Parser<'de, S>
+where
+    S: AsRef<[ParserState]> + AsMut<[ParserState]>,
+{
+    type Item = LocResult<'de, Event<'de>, ParseError>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.next() {
+            Ok(ev) => Some(Ok(ev)),
+            Err(e) if matches!(*e, ParseError::Eof) => None,
+            Err(e) => Some(Err(e)),
         }
     }
 }

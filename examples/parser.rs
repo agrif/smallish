@@ -7,9 +7,8 @@ bar {baz = "hello\nworld"}
 
 fn main() {
     let mut state = [de::ParserState::default(); 8];
-    let mut parser = de::Parser::new(Flavor::List, SOURCE, &mut state);
-    loop {
-        let ev = parser.next();
+    let parser = de::Parser::new(Flavor::List, SOURCE, &mut state);
+    for ev in parser {
         match ev {
             Ok(ev) => println!("{:?}", *ev),
             Err(e) => {
