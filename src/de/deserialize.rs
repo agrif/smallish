@@ -604,19 +604,19 @@ where
 
 #[derive(Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-struct Access<'a, 'de: 'a, S> {
-    de: &'a mut Deserializer<'de, S>,
+struct Access<'a, De> {
+    de: &'a mut De,
 }
 
-impl<'a, 'de, S> Access<'a, 'de, S> {
-    fn new(de: &'a mut Deserializer<'de, S>) -> Self {
+impl<'a, De> Access<'a, De> {
+    fn new(de: &'a mut De) -> Self {
         Self { de }
     }
 }
 
-impl<'a, 'de, S> de::SeqAccess<'de> for Access<'a, 'de, S>
+impl<'a, 'de, De> de::SeqAccess<'de> for Access<'a, De>
 where
-    S: AsRef<[ParserState]> + AsMut<[ParserState]>,
+    for<'b> &'b mut De: SmallishDe<'de>,
 {
     type Error = Error;
 
@@ -636,9 +636,9 @@ where
     }
 }
 
-impl<'a, 'de, S> de::EnumAccess<'de> for Access<'a, 'de, S>
+impl<'a, 'de, De> de::EnumAccess<'de> for Access<'a, De>
 where
-    S: AsRef<[ParserState]> + AsMut<[ParserState]>,
+    for<'b> &'b mut De: SmallishDe<'de>,
 {
     type Error = Error;
     type Variant = Self;
@@ -654,9 +654,9 @@ where
     }
 }
 
-impl<'a, 'de, S> de::VariantAccess<'de> for Access<'a, 'de, S>
+impl<'a, 'de, De> de::VariantAccess<'de> for Access<'a, De>
 where
-    S: AsRef<[ParserState]> + AsMut<[ParserState]>,
+    for<'b> &'b mut De: SmallishDe<'de>,
 {
     type Error = Error;
 
@@ -691,9 +691,9 @@ where
     }
 }
 
-impl<'a, 'de, S> de::MapAccess<'de> for Access<'a, 'de, S>
+impl<'a, 'de, De> de::MapAccess<'de> for Access<'a, De>
 where
-    S: AsRef<[ParserState]> + AsMut<[ParserState]>,
+    for<'b> &'b mut De: SmallishDe<'de>,
 {
     type Error = Error;
 
