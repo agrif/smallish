@@ -66,6 +66,8 @@ where
 trait SmallishDe<'de>: de::Deserializer<'de, Error = Error> {
     fn base(self) -> impl SmallishDe<'de>;
 
+    // implemented in terms of base()
+
     #[inline]
     fn next(self) -> Result<Event<'de>, Error> {
         self.base().next()
@@ -91,6 +93,8 @@ trait SmallishDe<'de>: de::Deserializer<'de, Error = Error> {
         self.base().error_without_event(err)
     }
 
+    // common implementations rarely changed
+
     #[inline]
     fn next_with<T>(self, f: impl FnOnce(Event<'de>) -> Option<T>) -> Result<T, Error> {
         let ev = self.next()?;
@@ -101,6 +105,31 @@ trait SmallishDe<'de>: de::Deserializer<'de, Error = Error> {
     fn peek_with<T>(self, f: impl FnOnce(Event<'de>) -> Option<T>) -> Result<Option<T>, Error> {
         let ev = self.peek()?;
         Ok(f(ev))
+    }
+
+    fn hook_special<V, F>(
+        mut self,
+        name: &'static str,
+        visitor: V,
+        default: F,
+    ) -> Result<V::Value, Error>
+    where
+        V: de::Visitor<'de>,
+        F: FnOnce(Self, V) -> Result<V::Value, Error>,
+        Self: core::ops::DerefMut,
+        Self::Target: Sized,
+        for<'a> &'a mut Self::Target: SmallishDe<'de>,
+    {
+        match name {
+            Escaped::<()>::SERDE_NAME => {
+                visitor.visit_newtype_struct(&mut escaped::EscapedHandler::new(&mut *self))
+            }
+            Located::SERDE_NAME => {
+                let loc = (&mut *self).location();
+                visitor.visit_map(located::LocatedHandler::new(loc, &mut *self))
+            }
+            _ => default(self, visitor),
+        }
     }
 }
 
@@ -444,11 +473,9 @@ where
     where
         V: de::Visitor<'de>,
     {
-        if name == Escaped::<()>::SERDE_NAME {
-            visitor.visit_newtype_struct(&mut escaped::EscapedHandler::new(self))
-        } else {
-            visitor.visit_newtype_struct(self)
-        }
+        self.hook_special(name, visitor, |de, visitor| {
+            visitor.visit_newtype_struct(de)
+        })
     }
 
     fn deserialize_seq<V>(self, visitor: V) -> Result<V::Value, Self::Error>
@@ -509,11 +536,7 @@ where
     where
         V: de::Visitor<'de>,
     {
-        if name == Located::SERDE_NAME {
-            return visitor.visit_map(located::LocatedHandler::new(self.location(), self));
-        }
-
-        self.deserialize_map(visitor)
+        self.hook_special(name, visitor, |de, visitor| de.deserialize_map(visitor))
     }
 
     fn deserialize_enum<V>(
