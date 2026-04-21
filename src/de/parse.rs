@@ -2,6 +2,7 @@ use super::{TokenError, Tokenizer};
 use crate::syntax::{Event, Token, TokenKind};
 use crate::types::{LocResult, Located};
 use crate::Flavor;
+use crate::FormatIter;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
@@ -14,7 +15,7 @@ pub enum ParseError {
     InvalidUtf8,
     #[error("unknown escape sequence")]
     UnknownEscape,
-    #[error("unexpected {0:?}, expected one of {1:?}")]
+    #[error("unexpected {0}, expected one of {choices}", choices=FormatIter::new(.1.iter(), ", "))]
     UnexpectedToken(TokenKind, &'static [TokenKind]),
     #[error("maximum recursion limit exceeded")]
     MaxRecursion,

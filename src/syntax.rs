@@ -21,6 +21,26 @@ define_enum_with_kind! {
     }
 }
 
+// to support error messages
+impl core::fmt::Display for TokenKind {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let s = match self {
+            Self::Newline => "'\\n'",
+            Self::Comma => "','",
+            Self::Equals => "'-'",
+            Self::ParenOpen => "'('",
+            Self::ParenClose => "')'",
+            Self::ListOpen => "'['",
+            Self::ListClose => "']'",
+            Self::MapOpen => "'{'",
+            Self::MapClose => "'}'",
+            Self::Ident => "identifier",
+            Self::Value => "value",
+        };
+        write!(f, "{}", s)
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Value<'de> {

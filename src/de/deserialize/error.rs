@@ -3,6 +3,7 @@ use serde::de;
 use crate::de::ParseError;
 use crate::syntax::{Float, Integer};
 use crate::types::{Located, UnescapeError};
+use crate::FormatIter;
 
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
@@ -11,8 +12,6 @@ pub enum Error {
     Parse(#[from] ParseError),
     #[error("unused input at end")]
     UnusedInput,
-    #[error("not implemented: {0}")]
-    NotImplemented(&'static str),
     #[error("integer out of range: {0}")]
     IntegerRange(Integer),
     #[error("float out of range: {0}")]
@@ -34,9 +33,9 @@ pub enum Error {
     InvalidValue,
     #[error("invalid length: {0}")]
     InvalidLength(usize),
-    #[error("unknown variant: expected {0:?}")]
+    #[error("unknown variant: expected one of {choices}", choices=FormatIter::new(.0.iter(), ", "))]
     UnknownVariant(&'static [&'static str]),
-    #[error("unknown field: expected {0:?}")]
+    #[error("unknown field: expected one of {choices}", choices=FormatIter::new(.0.iter(), ", "))]
     UnknownField(&'static [&'static str]),
     #[error("missing field: {0}")]
     MissingField(&'static str),
