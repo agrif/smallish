@@ -1,3 +1,191 @@
+//! Syntax documentation and common types to describe syntax.
+//!
+//! ## Basic Types
+//!
+//! *smallish* syntax is designed to be simple for humans to write,
+//! and to get out of the way of its main purpose: writing lists of
+//! simple instructions.
+//!
+//! This informs the most common syntax:
+//!
+//! * **Lists** are values enclosed in square brackets `[]`, separated
+//! by either a comma or newlines. When using list-flavored *smallish*,
+//! the brackets around the root list are omitted.
+//!
+//!   `[0, 1, 2]`
+//!
+//! * **Enumerations** are the variant name followed by arguments,
+//! separated by spaces. Tuple variants use the values directly, while
+//! struct variants use key-value pairs.
+//!
+//!   `VariantName key=42`
+//!
+//! * **Comments** begin with `#` and continue until the end of the line.
+//!
+//!   `# this is a comment`
+//!
+//! For example:
+//!
+//! ```
+//! # use smallish::{Flavor, from_str};
+//! #[derive(Debug, PartialEq, Eq, serde::Deserialize)]
+//! enum Instr {
+//!     UnitVariant,
+//!     TupleVariant(u8, u8, u8),
+//!     StructVariant { foo: u8, bar: Vec<u8> },
+//! }
+//!
+//! let r: Vec<Instr> = from_str(Flavor::List, r#"
+//! UnitVariant # comments!
+//! TupleVariant 0 1 2
+//! StructVariant foo=42 bar=[10, 20]
+//! "#).unwrap();
+//!
+//! assert_eq!(r, vec![
+//!     Instr::UnitVariant,
+//!     Instr::TupleVariant(0, 1, 2),
+//!     Instr::StructVariant { foo: 42, bar: vec![10, 20] },
+//! ]);
+//! ```
+//!
+//! These are the most important types to get started, but *smallish*
+//! supports other types as well:
+//!
+//! * **Maps and Structs** are enclosed in curly brackets `{}`
+//! containing key-value pairs, separated by either a comma or
+//! newlines. When using map-flavored *smallish*, the brackets around
+//! the root map are omitted.
+//!
+//!    `{foo = 5, bar = 10}`
+//!
+//! * **Unit Structs** are written as `null`.
+//!
+//! * **Options** are written as `null` for [None], and the value
+//! itself for [Some].
+//!
+//! * **Booleans** are written as `true` and `false`.
+//!
+//! * **Integers** are written as strings of digits in decimal, or
+//! prefixed by `0x` for hexidecimal, `0o` for octal, and `0b` for
+//! binary. They may start with `+` or `-`.
+//!
+//!    `-42`
+//!
+//! * **Floats** are written as strings of digits in decimal, with a
+//! decimal point `.` and optionally either a `+` or `-` in front and
+//! an exponent `e` at the end.
+//!
+//!    `6.28e-2`
+//!
+//! * **Characters** are written enclosed in single-quotes `'`, and
+//! support the same escapes as Rust.
+//!
+//!    `'A'`
+//!
+//!    `'\u{2603}'`
+//!
+//! * **Strings and Bytes** are written enclosed in double-quotes `"`,
+//! and bytes are prefixed with `b`. These also support the same
+//! escapes as Rust.
+//!
+//!    `"Hello,\nworld!"`
+//!
+//!    `b"\x00\x01"`
+//!
+//! ## Nested Enumerations and Precedence
+//!
+//! You can use parethesis `()` to enclose values. This is sometimes
+//! necessary to parse a value correctly. For example, enumerations
+//! passed as arguments to another enumeration sometimes need
+//! parenthesis to group the arguments correctly.
+//!
+//! ```
+//! # use smallish::{Flavor, from_str};
+//! #[derive(Debug, PartialEq, Eq, serde::Deserialize)]
+//! enum Arg { Plain, WithValue(u8) }
+//! #[derive(Debug, PartialEq, Eq, serde::Deserialize)]
+//! enum Instr { Foo { arg: Arg } }
+//!
+//! let r: Vec<Instr> = from_str(Flavor::List, r#"
+//! Foo arg=Plain
+//! Foo arg=(WithValue 42)
+//! "#).unwrap();
+//!
+//! assert_eq!(r, vec![
+//!     Instr::Foo { arg: Arg::Plain },
+//!     Instr::Foo { arg: Arg::WithValue(42) },
+//! ]);
+//! ```
+//!
+//! ## Using with `serde`
+//!
+//! There are a few details to be aware of when using *smallish* with
+//! `serde`.
+//!
+//! ### Options
+//!
+//! Options are written as `null` for [None], and the value itself for
+//! [Some].
+//!
+//! ```
+//! # use smallish::{Flavor, from_str};
+//! assert_eq!(from_str::<Option<u8>>(Flavor::Value, "null").unwrap(), None);
+//! assert_eq!(from_str::<Option<u8>>(Flavor::Value, "20").unwrap(), Some(20));
+//! ```
+//!
+//! ### Newtype Structs and Variants
+//!
+//! Newtypes are written exactly the same as the value they
+//! contain. In particular, for newtype enumeration variants, this
+//! means that variants containing a sequence look like tuple
+//! variants, and those containing a struct look like struct
+//! variants. Newtype variants containing any other data are treated
+//! like tuple variants with one argument.
+//!
+//! ```
+//! # use smallish::{Flavor, from_str};
+//! #[derive(Debug, PartialEq, Eq, serde::Deserialize)]
+//! enum E {
+//!     NewtypeSeq(Vec<u8>),
+//!     NewtypeStruct(std::ops::Range<u8>),
+//!     NewtypePlain(u8),
+//! }
+//!
+//! let r: Vec<E> = from_str(Flavor::List, r#"
+//! NewtypeSeq 0 1 2
+//! NewtypeStruct start=10 end=20
+//! NewtypePlain 42
+//! "#).unwrap();
+//!
+//! assert_eq!(r, vec![
+//!     E::NewtypeSeq(vec![0, 1, 2]),
+//!     E::NewtypeStruct(std::ops::Range { start: 10, end: 20 }),
+//!     E::NewtypePlain(42),
+//! ]);
+//! ```
+//!
+//! ### Escaped Strings and Bytes
+//!
+//! Strings and bytes can be borrowed without copy from the document
+//! itself, as long as they do not contain any escapes. Strings and
+//! bytes with escapes must be first un-escaped into a scratch buffer
+//! provided to the deserializer, using
+//! e.g. [from_str_escaped](crate::from_str_escaped) or
+//! [from_slice_escaped](crate::from_slice_escaped). If this buffer
+//! becomes full, the deserialization will fail.
+//!
+//! You can either increase the size of this buffer, or opt-out of
+//! un-escaping by wrapping your string (or bytes) type in
+//! [Escaped]. Strings wrapped this way can always be deserialized
+//! without a copy, but may contain unhandled escape sequences that
+//! you must handle yourself.
+//!
+//! ```
+//! # use smallish::{Flavor, from_str, types::Escaped};
+//! let r: Escaped<&str> = from_str(Flavor::Value, r#""hello\n""#).unwrap();
+//! assert_eq!(*r, r#"hello\n"#)
+//! ```
+
 use crate::types::Escaped;
 
 /// The internal integer type. Integers outside this range will fail to parse.
