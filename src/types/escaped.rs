@@ -20,7 +20,7 @@ pub enum EscapedFragment<Slice, Item> {
     Item(Item),
 }
 
-#[derive(Clone, Debug, Default, serde::Deserialize)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash, serde::Deserialize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[serde(rename = "__smallish_magic_escaped__")]
 pub struct Escaped<T>(T);
