@@ -1,7 +1,6 @@
 pub type LocResult<'de, T, E> = Result<Located<'de, T>, Located<'de, E>>;
 
-#[derive(Clone, Copy, serde::Deserialize)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Clone, Copy, Eq, serde::Deserialize)]
 #[serde(rename = "__smallish_magic_located__")]
 pub struct Located<'a, T> {
     pub source: Option<&'a [u8]>,
@@ -166,18 +165,59 @@ impl<'de, T> core::ops::DerefMut for Located<'de, T> {
     }
 }
 
+impl<'de, T> core::cmp::PartialEq for Located<'de, T>
+where
+    T: core::cmp::PartialEq,
+{
+    fn eq(&self, other: &Self) -> bool {
+        // ignore source
+        self.line == other.line
+            && self.column == other.column
+            && self.offset == other.offset
+            && self.value == other.value
+    }
+}
+
 impl<'de, T> core::fmt::Debug for Located<'de, T>
 where
     T: core::fmt::Debug,
 {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("Located")
+            // use dummy value for source to avoid spam
             .field("source", &self.source.map(|_| "..."))
             .field("line", &self.line)
             .field("column", &self.column)
             .field("offset", &self.offset)
             .field("value", &self.value)
             .finish()
+    }
+}
+
+#[cfg(feature = "defmt")]
+impl<'de, T> defmt::Format for Located<'de, T>
+where
+    T: defmt::Format,
+{
+    fn format(&self, f: defmt::Formatter) {
+        if let Some(line) = self.source_line_bytes() {
+            defmt::write!(
+                f,
+                "<at {0=usize}:{1=usize} ({3=[u8]:a})> {2}",
+                self.line,
+                self.column,
+                self.value,
+                line,
+            )
+        } else {
+            defmt::write!(
+                f,
+                "<at {0=usize}:{1=usize}> {2}",
+                self.line,
+                self.column,
+                self.value
+            )
+        }
     }
 }
 
