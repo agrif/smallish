@@ -34,7 +34,7 @@ assert_eq!(instrs, &[Instr::Print{ msg: "hello" }, Instr::SetMinMax(20, 60)]);
 ```
 
 It is also possible to use [from_slice][] if your source is a
-bytestring. Both of these methods have a fixed recursion depth. If
+slice of bytes. Both of these methods have a fixed recursion depth. If
 your data type is very deeply nested, you should use [Deserializer][]
 directly.
 
@@ -53,7 +53,7 @@ documentation. This also includes many examples.
 
 ## Escaping
 
-*smallish* strings and bytestrings support the same escapes as
+*smallish* strings and bytes support the same escapes as
 Rust. However, it needs a scratch buffer to parse strings with
 escapes. This can be done with the [from_slice_escaped][] and
 [from_str_escaped][] functions, or more directly with

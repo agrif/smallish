@@ -20,10 +20,16 @@ macro_rules! define_enum_with_kind {
         }
     ) => {
         paste::paste! {
+            /// Same as
+            #[doc = concat!("[", stringify!($name), "]")]
+            /// but without the attached data.
             #[derive(Clone, Copy, Debug, PartialEq, Eq)]
             #[cfg_attr(feature = "defmt", derive(defmt::Format))]
             $vis enum [<$name Kind>] {
-                $($variant,)*
+                $(
+                    $(#[$variant_attr])*
+                    $variant,
+                )*
             }
 
             impl $(<$life>)? $name $(<$life>)? {

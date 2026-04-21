@@ -69,7 +69,7 @@ macro_rules! default_state_size {
 /// [Deserializer](de::Deserializer) directly.
 ///
 /// This function will return [BufferFull](de::Error::BufferFull) if
-/// the input contains escaped strings or escaped bytestrings. Use
+/// the input contains escaped strings or escaped bytes. Use
 /// [from_slice_escaped] instead, or opt-out of unescaping with
 /// [Escaped](types::Escaped).
 ///
@@ -96,7 +96,7 @@ where
 /// [Deserializer](de::Deserializer) directly.
 ///
 /// This uses `unescape` as a scratch buffer to remove escapes from
-/// strings and bytestrings. If this buffer runs out of space, this
+/// strings and bytes. If this buffer runs out of space, this
 /// function returns [BufferFull](de::Error::BufferFull). Consider
 /// using a larger buffer, or using [Escaped](types::Escaped).
 ///
@@ -124,7 +124,7 @@ where
 /// [Deserializer](de::Deserializer) directly.
 ///
 /// This function will return [BufferFull](de::Error::BufferFull) if
-/// the input contains escaped strings or escaped bytestrings. Use
+/// the input contains escaped strings or escaped bytes. Use
 /// [from_str_escaped] instead, or opt-out of unescaping with
 /// [Escaped](types::Escaped).
 ///
@@ -150,7 +150,7 @@ where
 /// [Deserializer](de::Deserializer) directly.
 ///
 /// This uses `unescape` as a scratch buffer to remove escapes from
-/// strings and bytestrings. If this buffer runs out of space, this
+/// strings and bytes. If this buffer runs out of space, this
 /// function returns [BufferFull](de::Error::BufferFull). Consider
 /// using a larger buffer, or using [Escaped](types::Escaped).
 ///
