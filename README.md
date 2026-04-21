@@ -41,6 +41,16 @@ directly.
  [from_slice]: https://agrif.github.io/smallish/smallish/fn.from_slice.html
  [Deserializer]: https://agrif.github.io/smallish/smallish/de/struct.Deserializer.html
 
+## Syntax
+
+The details of *smallish* syntax are outlined in the [syntax][] module
+documentation. This also includes many examples.
+
+*smallish* comes in a few slightly different [Flavors][Flavor].
+
+ [syntax]: https://agrif.github.io/smallish/smallish/syntax/index.html
+ [Flavor]: https://agrif.github.io/smallish/smallish/enum.Flavor.html
+
 ## Escaping
 
 *smallish* strings and bytestrings support the same escapes as
