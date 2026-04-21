@@ -7,6 +7,8 @@
 #[macro_use]
 mod macros;
 
+mod fmt;
+
 pub mod de;
 pub mod syntax;
 pub mod types;
@@ -62,36 +64,4 @@ where
     T: serde::de::Deserialize<'de>,
 {
     from_slice_escaped(flavor, input.as_bytes(), unescape)
-}
-
-// helper to format strings nicely in error message
-struct FormatIter<'a, I> {
-    iter: core::cell::Cell<Option<I>>,
-    sep: &'a str,
-}
-
-impl<'a, I> FormatIter<'a, I> {
-    fn new(iter: I, sep: &'a str) -> Self {
-        Self {
-            iter: core::cell::Cell::new(Some(iter)),
-            sep,
-        }
-    }
-}
-
-impl<'a, I> core::fmt::Display for FormatIter<'a, I>
-where
-    I: Iterator,
-    I::Item: core::fmt::Display,
-{
-    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
-        let iter = self.iter.take().expect("FormatIter used more than once");
-        let mut first = true;
-        for part in iter {
-            let sep = if !first { self.sep } else { "" };
-            write!(f, "{}{}", sep, part)?;
-            first = false;
-        }
-        Ok(())
-    }
 }

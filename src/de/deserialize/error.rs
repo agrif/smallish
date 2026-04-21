@@ -1,9 +1,9 @@
 use serde::de;
 
 use crate::de::ParseError;
+use crate::fmt::FormatIter;
 use crate::syntax::{Float, Integer};
 use crate::types::{Located, UnescapeError};
-use crate::FormatIter;
 
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
