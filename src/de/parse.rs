@@ -243,7 +243,6 @@ where
                     // but full enums are okay in maps
                     if matches!(self.state(), State::Enum) {
                         self.push(State::BareEnum)?;
-                        self.unused_token = Some(loc.wrap(tok));
                     } else {
                         self.push(State::Enum)?;
                     }
@@ -257,11 +256,11 @@ where
             },
 
             State::BareEnum => match tok {
-                Token::Ident(_name) => {
+                _ => {
                     self.pop()?;
+                    self.unused_token = Some(loc.wrap(tok));
                     Ok(Some(Event::EnumClose))
                 }
-                t => self.unexpected(t, &[Ident]),
             },
 
             State::ListItem => match tok {
@@ -362,19 +361,28 @@ where
                     self.push(State::MapItem)?;
                     Ok(Some(Event::MapOpen))
                 }
-                Token::Ident(name) => match Located::from_result(self.tokens.peek()).split().1? {
-                    // careful: ident might be a bare enum in enum context,
-                    // so look for equals
-                    Token::Equals => {
-                        self.push(State::FieldEquals)?;
-                        Ok(Some(Event::Key(name)))
+                Token::Ident(name) => {
+                    let (subloc, subtok) = Located::from_result(self.tokens.next()).split();
+                    match subtok {
+                        // careful: ident might be a bare enum in enum context,
+                        // so look for equals
+                        Ok(subtok @ Token::Equals) => {
+                            self.push(State::FieldEquals)?;
+                            self.unused_token = Some(subloc.wrap(subtok));
+                            Ok(Some(Event::Key(name)))
+                        }
+                        Ok(subtok) => {
+                            self.push(State::BareEnum)?;
+                            self.unused_token = Some(subloc.wrap(subtok));
+                            Ok(Some(Event::EnumOpen(name)))
+                        }
+                        Err(TokenError::Eof) => {
+                            self.push(State::BareEnum)?;
+                            Ok(Some(Event::EnumOpen(name)))
+                        }
+                        Err(e) => Err(e)?,
                     }
-                    _ => {
-                        self.push(State::BareEnum)?;
-                        self.unused_token = Some(loc.wrap(tok));
-                        Ok(Some(Event::EnumOpen(name)))
-                    }
-                },
+                }
                 Token::Value(v) => Ok(Some(Event::Value(v))),
                 t => self.unexpected(
                     t,
@@ -413,7 +421,7 @@ where
                 Err(e) => match e.into() {
                     ParseError::Eof => {
                         let val = match self.only_stack_state() {
-                            Some(state) if matches!(state, State::Enum) => {
+                            Some(state) if matches!(state, State::Enum | State::BareEnum) => {
                                 let _ = self.pop();
                                 Ok(Event::EnumClose)
                             }

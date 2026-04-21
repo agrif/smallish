@@ -64,7 +64,7 @@ NewtypeTuple [0, 1] '🤔'
 List North South (Turnwise 2)
 NewtypeOpt null
 NewtypeOpt [0, 1, 2]
-"#;
+List North South"#;
 
 fn main() {
     let mut unescape_buffer = [0; 128];
