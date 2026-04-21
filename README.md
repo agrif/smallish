@@ -51,35 +51,14 @@ documentation. This also includes many examples.
  [syntax]: https://agrif.github.io/smallish/smallish/syntax/index.html
  [Flavor]: https://agrif.github.io/smallish/smallish/enum.Flavor.html
 
-## Escaping
+## Special Types
 
-*smallish* strings and bytes support the same escapes as
-Rust. However, it needs a scratch buffer to parse strings with
-escapes. This can be done with the [from_slice_escaped][] and
-[from_str_escaped][] functions, or more directly with
-[Deserializer][].
+There are a few special types that modify how a value is deserialized
+by *smallish*, for example by annotating it with source location, or
+opting out of string escapes for guaranteed zero-copy behavior. These
+types are documented in the [types][] module.
 
- [from_str_escaped]: https://agrif.github.io/smallish/smallish/fn.from_str_escaped.html
- [from_slice_escaped]: https://agrif.github.io/smallish/smallish/fn.from_slice_escaped.html
-
-It is also possible to opt-out of unescaping by wrapping a string type
-in [Escaped][]. This deserializes the string unmodified, with escapes
-still intact, at which point you can choose to unescape it manually or
-use it as-is.
-
- [Escaped]: https://agrif.github.io/smallish/smallish/types/struct.Escaped.html
-
-## Locating Values and Errors
-
-You can have *smallish* attach a source location to any value in your
-type by wrapping it in [Located][]. This can be helpful to point
-humans to where an error ocurred, for example.
-
- [Located]: https://agrif.github.io/smallish/smallish/types/struct.Located.html
-
-Errors produced by *smallish* are always wrapped in [Located][]. Some
-effort has gone into making them useful to humans even in an embedded
-context.
+ [types]: https://agrif.github.io/smallish/smallish/types/index.html
 
 ## Feature Flags
 

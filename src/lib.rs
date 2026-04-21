@@ -7,10 +7,7 @@
 //! [Deserializer]: de::Deserializer
 //! [syntax]: syntax
 //! [Flavor]: Flavor
-//! [from_str_escaped]: from_str_escaped
-//! [from_slice_escaped]: from_slice_escaped
-//! [Escaped]: types::Escaped
-//! [Located]: types::Located
+//! [types]: types
 #![doc = include_str!("../README.md")]
 
 #[macro_use]
