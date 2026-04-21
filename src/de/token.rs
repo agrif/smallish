@@ -6,7 +6,7 @@ use nom::{
 use crate::syntax::{Integer, Token, Value};
 use crate::types::{Escaped, EscapedFragment, LocResult, Located};
 
-#[derive(Clone, Debug, thiserror::Error)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum TokenError {
     #[error("end of file")]

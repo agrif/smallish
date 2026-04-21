@@ -4,7 +4,7 @@ use crate::de::ParseError;
 use crate::syntax::{Float, Integer};
 use crate::types::{Located, UnescapeError};
 
-#[derive(Clone, Debug, thiserror::Error)]
+#[derive(Clone, Debug, PartialEq, thiserror::Error)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Error {
     #[error("parse error: {0}")]

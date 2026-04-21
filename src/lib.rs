@@ -11,7 +11,7 @@ pub mod de;
 pub mod syntax;
 pub mod types;
 
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Flavor {
     #[default]

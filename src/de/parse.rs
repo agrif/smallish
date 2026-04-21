@@ -3,7 +3,7 @@ use crate::syntax::{Event, Token, TokenKind};
 use crate::types::{LocResult, Located};
 use crate::Flavor;
 
-#[derive(Clone, Debug, thiserror::Error)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum ParseError {
     #[error("end of file")]

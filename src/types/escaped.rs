@@ -4,7 +4,7 @@ use nom::{combinator, multi, Parser};
 
 use crate::de::{token::IResult, TokenError, Tokenizer};
 
-#[derive(Clone, Debug, thiserror::Error)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum UnescapeError {
     #[error("bad unescaped literal")]
@@ -13,7 +13,7 @@ pub enum UnescapeError {
     BufferFull,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum EscapedFragment<Slice, Item> {
     Slice(Slice),

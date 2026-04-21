@@ -4,7 +4,7 @@ pub type Integer = i64;
 pub type Float = f32;
 
 define_enum_with_kind! {
-    #[derive(Clone, Debug)]
+    #[derive(Clone, Copy, Debug, PartialEq)]
     #[cfg_attr(feature = "defmt", derive(defmt::Format))]
     pub enum Token<'de> {
         Newline,
@@ -21,7 +21,7 @@ define_enum_with_kind! {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Value<'de> {
     Null,
@@ -33,7 +33,7 @@ pub enum Value<'de> {
     Bytes(Escaped<&'de [u8]>),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Event<'de> {
     ListOpen,
