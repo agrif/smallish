@@ -19,17 +19,17 @@ use smallish::{Flavor, from_str};
 
 #[derive(Debug, PartialEq, Eq, serde::Deserialize)]
 enum Instr<'a> {
-    Print(&'a str),
-    SetTemperature(u16),
+    Print { msg: &'a str },
+    SetMinMax(u16, u16),
 }
 
 let source = r#"
-Print "hello" # comments work
-SetTemperature 20
+Print msg="hello" # comments work
+SetMinMax 20 60
 "#;
 
 let instrs: Vec<Instr> = from_str(Flavor::List, source).unwrap();
-assert_eq!(instrs, &[Instr::Print("hello"), Instr::SetTemperature(20)]);
+assert_eq!(instrs, &[Instr::Print{ msg: "hello" }, Instr::SetMinMax(20, 60)]);
 ```
 
 ## Feature Flags
