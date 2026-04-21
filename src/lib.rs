@@ -2,9 +2,11 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 // fix up links in README
 //! [LICENSE]: https://github.com/agrif/smallish/blob/main/LICENSE
-//! [from_slice_escaped]: from_slice_escaped
-//! [from_str_escaped]: from_str_escaped
+//! [from_str]: from_str
+//! [from_slice]: from_slice
 //! [Deserializer]: de::Deserializer
+//! [from_str_escaped]: from_str_escaped
+//! [from_slice_escaped]: from_slice_escaped
 //! [Escaped]: types::Escaped
 //! [Located]: types::Located
 #![doc = include_str!("../README.md")]

@@ -6,13 +6,14 @@
 
 Lightweight, no-std, no-alloc syntax for configuration and scripting.
 
-## Quick Start
+## Deserializing
 
 *smallish* is designed to be used with [serde][] to parse lists of
 short instructions. For example, you can put your instructions inside
-an enumeration.
+an enumeration, and then parse them with [from_str][].
 
  [serde]: https://serde.rs/
+ [from_str]: https://agrif.github.io/smallish/smallish/fn.from_str.html
 
 ```rust
 use smallish::{Flavor, from_str};
@@ -32,19 +33,13 @@ let instrs: Vec<Instr> = from_str(Flavor::List, source).unwrap();
 assert_eq!(instrs, &[Instr::Print{ msg: "hello" }, Instr::SetMinMax(20, 60)]);
 ```
 
-## Feature Flags
+It is also possible to use [from_slice][] if your source is a
+bytestring. Both of these methods have a fixed recursion depth. If
+your data type is very deeply nested, you should use [Deserializer][]
+directly.
 
-These features are enabled by default:
-
- * **`custom-error-messages`** attaches a small space for custom
-   error messages to the deserialization error type. This costs a
-   small amount of space, but increases the usefulness of a few error
-   messages.
-
-These features are optional:
-
- * **`defmt`** derives `defmt::Format` for all types, and uses
-   `defmt::panic!` and friends instead of their standard counterparts.
+ [from_slice]: https://agrif.github.io/smallish/smallish/fn.from_slice.html
+ [Deserializer]: https://agrif.github.io/smallish/smallish/de/struct.Deserializer.html
 
 ## Escaping
 
@@ -54,9 +49,8 @@ escapes. This can be done with the [from_slice_escaped][] and
 [from_str_escaped][] functions, or more directly with
 [Deserializer][].
 
- [from_slice_escaped]: https://agrif.github.io/smallish/smallish/fn.from_slice_escaped.html
  [from_str_escaped]: https://agrif.github.io/smallish/smallish/fn.from_str_escaped.html
- [Deserializer]: https://agrif.github.io/smallish/smallish/de/struct.Deserializer.html
+ [from_slice_escaped]: https://agrif.github.io/smallish/smallish/fn.from_slice_escaped.html
 
 It is also possible to opt-out of unescaping by wrapping a string type
 in [Escaped][]. This deserializes the string unmodified, with escapes
@@ -76,6 +70,20 @@ humans to where an error ocurred, for example.
 Errors produced by *smallish* are always wrapped in [Located][]. Some
 effort has gone into making them useful to humans even in an embedded
 context.
+
+## Feature Flags
+
+These features are enabled by default:
+
+ * **`custom-error-messages`** attaches a small space for custom
+   error messages to the deserialization error type. This costs a
+   small amount of space, but increases the usefulness of a few error
+   messages.
+
+These features are optional:
+
+ * **`defmt`** derives `defmt::Format` for all types, and uses
+   `defmt::panic!` and friends instead of their standard counterparts.
 
 ## License
 
