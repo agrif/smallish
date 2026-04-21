@@ -9,10 +9,12 @@
 //! This informs the most common syntax:
 //!
 //! * **Lists** are values enclosed in square brackets `[]`, separated
-//! by either a comma or newlines. When using list-flavored *smallish*,
-//! the brackets around the root list are omitted.
+//! by either a comma or newlines.
 //!
 //!   `[0, 1, 2]`
+//!
+//!    When using list-flavored *smallish*, the brackets around the
+//!    root list are omitted.
 //!
 //! * **Enumerations** are the variant name followed by arguments,
 //! separated by spaces. Tuple variants use the values directly, while
@@ -53,15 +55,14 @@
 //!
 //! * **Maps and Structs** are enclosed in curly brackets `{}`
 //! containing key-value pairs, separated by either a comma or
-//! newlines. When using map-flavored *smallish*, the brackets around
-//! the root map are omitted.
+//! newlines.
 //!
 //!    `{foo = 5, bar = 10}`
 //!
-//! * **Unit Structs** are written as `null`.
+//!    When using map-flavored *smallish*, the brackets around the
+//!    root map are omitted.
 //!
-//! * **Options** are written as `null` for [None], and the value
-//! itself for [Some].
+//! * **Unit Structs** are written as `null`.
 //!
 //! * **Booleans** are written as `true` and `false`.
 //!
@@ -91,6 +92,13 @@
 //!    `"Hello,\nworld!"`
 //!
 //!    `b"\x00\x01"`
+//!
+//! ## Flavors
+//!
+//! *smallish* comes in [**Flavors**](crate::Flavor), which change how
+//! the root value is represented. Value flavored is the default,
+//! while map and list flavored *smallish* simply omit the enclosing
+//! braces for that root value.
 //!
 //! ## Nested Enumerations and Precedence
 //!
@@ -125,7 +133,7 @@
 //! ### Options
 //!
 //! Options are written as `null` for [None], and the value itself for
-//! [Some].
+//! [Some]. Note that this means `Some(())` is not representable.
 //!
 //! ```
 //! # use smallish::{Flavor, from_str};
