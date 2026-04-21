@@ -6,9 +6,8 @@ bar {baz = "hello\nworld"}
 "#;
 
 fn main() {
-    let mut tokenizer = de::Tokenizer::new(SOURCE.as_bytes());
-    loop {
-        let tok = tokenizer.next();
+    let tokenizer = de::Tokenizer::new(SOURCE.as_bytes());
+    for tok in tokenizer {
         match tok {
             Ok(tok) => println!("{:?}", *tok),
             Err(e) => {

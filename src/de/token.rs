@@ -452,3 +452,15 @@ impl<'de> Tokenizer<'de> {
         .parse(input)
     }
 }
+
+impl<'de> Iterator for Tokenizer<'de> {
+    type Item = LocResult<'de, Token<'de>, TokenError>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.next() {
+            Ok(ev) => Some(Ok(ev)),
+            Err(e) if matches!(*e, TokenError::Eof) => None,
+            Err(e) => Some(Err(e)),
+        }
+    }
+}
