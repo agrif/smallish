@@ -59,9 +59,9 @@ escapes. This can be done with the [from_slice_escaped][] and
  [Deserializer]: https://agrif.github.io/smallish/smallish/de/struct.Deserializer.html
 
 It is also possible to opt-out of unescaping by wrapping a string type
-in [Escaped][]. This deserializes the string directly, with escapes
+in [Escaped][]. This deserializes the string unmodified, with escapes
 still intact, at which point you can choose to unescape it manually or
-use it directly.
+use it as-is.
 
  [Escaped]: https://agrif.github.io/smallish/smallish/types/struct.Escaped.html
 
