@@ -4,22 +4,63 @@ use nom::{combinator, multi, Parser};
 
 use crate::de::{token::IResult, TokenError, Tokenizer};
 
+/// Errors encountered by [Escaped::unescape].
 #[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum UnescapeError {
+    /// The string or bytes is malformed (usually a bad escape).
     #[error("bad unescaped literal")]
     BadLiteral(#[from] TokenError),
+    /// The buffer used to unescape the string or bytes is full.
     #[error("unescape buffer full")]
     BufferFull,
 }
 
+/// A fragment of an escaped string or bytes from [Escaped::fragments].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum EscapedFragment<Slice, Item> {
+    /// A slice of unescaped data (e.g. `&str` or `&[u8]`).
     Slice(Slice),
+    /// A single item (e.g. `char` or `u8`).
     Item(Item),
 }
 
+/// A string or bytes value that contains escape sequences.
+///
+/// This type is used by *smallish* to represent string or bytes
+/// literals that may contain escape sequences. It also has methods
+/// such as [has_escapes](Escaped::has_escapes) and
+/// [unescape](Escaped::unescape) to handle those escapes and convert
+/// them into a plain string.
+///
+/// Most of the methods require that `T: Escapeable`, which
+/// essentially means you can [Borrow] `T` as either `&str` or
+/// `&[u8]`. This covers almost all string-like and bytes-like types.
+///
+/// [Escaped] implements [Deref](core::ops::Deref), and can be used in
+/// the same places as a reference to the underlying type. To remove
+/// the wrapped value entirely, use [Escaped::as_escaped].
+///
+/// ## Deserialization
+///
+/// This type modifies how deserialization works for the contained
+/// type. String-like or bytes-like types wrapped in [Escaped] will
+/// opt-out of the automatic un-escaping, allowing for them to be
+/// deserialized without the scratch buffer usually used for
+/// un-escaping. This also enables guaranteed zero-copy
+/// deserialization, if the underlying type supports it.
+///
+/// ```
+/// # use smallish::{Flavor, from_str, types::Escaped};
+/// let r: Escaped<String> = from_str(Flavor::Value, r#""escapes\n\n""#).unwrap();
+/// assert_eq!(*r, r#"escapes\n\n"#);
+/// ```
+///
+/// Note that this only works for a string or bytes type directly
+/// wrapped in [Escaped], e.g. `Escaped<&[u8]>` or
+/// `Escaped<String>`. Types with more deeply nested strings will be
+/// handled normally, with the normal automatic un-escaping.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash, serde::Deserialize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[serde(rename = "__smallish_magic_escaped__")]
@@ -30,6 +71,12 @@ impl<T> Escaped<T> {
 }
 
 impl<T> Escaped<T> {
+    /// Create a new escaped string or bytes from an underlying value.
+    ///
+    /// This is checked for validity: if the value is malformed
+    /// (usually from a bad escape sequence), this will fail.
+    ///
+    /// To avoid this check, see [new_unchecked](Self::new_unchecked).
     pub fn new<B, I>(s: T) -> Result<Self, TokenError>
     where
         T: Escapeable<B, I>,
@@ -54,6 +101,12 @@ impl<T> Escaped<T> {
         }
     }
 
+    /// Returns `true` if the contained value needs to be
+    /// [unescape](Self::unescape)'d.
+    ///
+    /// This will also return `true` if the contained value has
+    /// errors. Calling [unescape](Self::unescape) in that case will
+    /// tell you exactly which error.
     pub fn has_escapes<B, I>(&self) -> bool
     where
         T: Escapeable<B, I>,
@@ -66,6 +119,13 @@ impl<T> Escaped<T> {
         )
     }
 
+    /// Iterate over the fragments inside this string or bytes.
+    ///
+    /// This yields valid slices (`&str` or `&[u8]`) and un-escaped
+    /// items (`char` or `u8`) from the wrapped value.
+    ///
+    /// If you have used [new_unchecked](Self::new_unchecked), it may
+    /// also yield an error, usually due to an unknown escape.
     pub fn fragments<'a, B, I>(
         &'a self,
     ) -> impl Iterator<Item = Result<EscapedFragment<&'a B, I>, TokenError>>
@@ -79,6 +139,20 @@ impl<T> Escaped<T> {
         }
     }
 
+    /// Un-escape this string or bytes, using the provided scratch buffer.
+    ///
+    /// This un-escapes the contained value, returning a tuple
+    /// containing the unused portion of the scratch buffer and the
+    /// un-escaped value (either `&str` or `&[u8]`) itself.
+    ///
+    /// This will fail if the value contains a bad escape, or if the
+    /// scratch buffer provided is too small.
+    ///
+    /// Note that due to lifetime requirements, this function will
+    /// *always* perform a copy, even if the contained value has no
+    /// escapes. If you need zero-copy behavior, check
+    /// [has_escapes](Self::has_escapes) first to see if it is even
+    /// necessary to call this function.
     pub fn unescape<'buf, B, I>(
         &self,
         buffer: &'buf mut [u8],
@@ -119,10 +193,21 @@ impl<T> Escaped<T> {
 }
 
 impl<T> Escaped<T> {
+    /// Create a new escaped string or bytes from an underlying value,
+    /// without checking it.
+    ///
+    /// This wraps the value directly, even if it contains invalid
+    /// escapes. This is not unsafe, but it might result in errors
+    /// when trying to [unescape](Self::unescape) it. To check the
+    /// value for validity up-front, see [new](Self::new).
     pub fn new_unchecked(s: T) -> Self {
         Self(s)
     }
 
+    /// Extract the wrapped value.
+    ///
+    /// This removes the [Escaped] wrapper and returns the wrapped
+    /// value. If this value was deserialized, it may contain escapes!
     pub fn as_escaped(self) -> T {
         self.0
     }
@@ -184,6 +269,11 @@ where
     }
 }
 
+/// Types that are suitable to be wrapped in [Escaped].
+///
+/// This trait is sealed, meaning it can only be implemented by this
+/// crate. However, it comes with implementations for any type that
+/// implements the [Borrow] trait and yields `&str` or `&[u8]`.
 #[allow(private_bounds)]
 pub trait Escapeable<Slice: ?Sized, Item>: SealedEscapeable<Slice, Item> {}
 
