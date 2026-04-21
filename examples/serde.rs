@@ -56,13 +56,13 @@ Draw true
 Vec 0 1 2
 Go dir=North
 Go dir=(Turnwise 2)
-Go dir=null opts={sub={flag=true}}
+Go dir=none opts={sub={flag=true}}
 SetOptions foo={flag=false} bar="bar" madeup={this=2}
 SetOptions bar="hello\nworld" baz=b"\n\n"
 NewtypeTuple [0, 1] '\u{1f914}'
 NewtypeTuple [0, 1] '🤔'
 List North South (Turnwise 2)
-NewtypeOpt null
+NewtypeOpt none
 NewtypeOpt [0, 1, 2]
 List North South"#;
 

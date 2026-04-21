@@ -198,7 +198,8 @@ where
             Event::MapOpen => self.deserialize_map(visitor),
             Event::EnumOpen(_) => self.deserialize_enum("", &[], visitor),
             Event::Value(v) => match v {
-                Value::Null => self.deserialize_unit(visitor),
+                Value::Unit => self.deserialize_unit(visitor),
+                Value::None => self.deserialize_option(visitor),
                 Value::Bool(_) => self.deserialize_bool(visitor),
                 Value::Integer(_) => self.deserialize_i64(visitor),
                 Value::Float(_) => self.deserialize_f32(visitor),
@@ -417,7 +418,7 @@ where
         V: de::Visitor<'de>,
     {
         if self
-            .peek_with(|t| as_variant!(t, Event::Value).and_then(as_variant!(Value::Null => ())))?
+            .peek_with(|t| as_variant!(t, Event::Value).and_then(as_variant!(Value::None => ())))?
             .is_some()
         {
             self.consume();
@@ -431,7 +432,7 @@ where
     where
         V: de::Visitor<'de>,
     {
-        self.next_with(|t| as_variant!(t, Event::Value).and_then(as_variant!(Value::Null => ())))?;
+        self.next_with(|t| as_variant!(t, Event::Value).and_then(as_variant!(Value::Unit => ())))?;
         visitor.visit_unit()
     }
 

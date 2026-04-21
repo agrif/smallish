@@ -211,7 +211,17 @@ impl<'de> Tokenizer<'de> {
         .parse(input)
     }
 
-    fn ident(input: &[u8]) -> IResult<&[u8], &str> {
+    fn unit<'a>(input: &'a [u8]) -> IResult<&'a [u8], Token<'a>> {
+        sequence::delimited(
+            character::char('('),
+            Self::whitespace0,
+            character::char(')'),
+        )
+        .map(|_| Token::Value(Value::Unit))
+        .parse(input)
+    }
+
+    fn raw_ident(input: &[u8]) -> IResult<&[u8], &str> {
         sequence::terminated(
             combinator::verify(
                 bytes::take_while1(|c: u8| c.is_ascii_alphanumeric() || c == b'_'),
@@ -222,6 +232,17 @@ impl<'de> Tokenizer<'de> {
         // safety: the above parser only matches valid ascii
         .map(|s| unsafe { core::str::from_utf8_unchecked(s) })
         .parse(input)
+    }
+
+    fn ident_or_literal<'a>(input: &'a [u8]) -> IResult<&'a [u8], Token<'a>> {
+        Self::raw_ident
+            .map(|id| match id {
+                "none" => Token::Value(Value::None),
+                "true" => Token::Value(Value::Bool(true)),
+                "false" => Token::Value(Value::Bool(false)),
+                _ => Token::Ident(id),
+            })
+            .parse(input)
     }
 
     fn integer<'a>(input: &'a [u8]) -> IResult<&'a [u8], Token<'a>> {
@@ -436,18 +457,14 @@ impl<'de> Tokenizer<'de> {
         branch::alt((
             sequence::terminated(Self::newline, Self::whitespace0),
             sequence::terminated(Self::comma, Self::whitespace0),
+            sequence::terminated(Self::unit, Self::whitespace0),
             sequence::terminated(Self::symbol, Self::whitespace0),
             sequence::terminated(Self::integer, Self::whitespace0),
             sequence::terminated(Self::float, Self::whitespace0),
             sequence::terminated(Self::character, Self::whitespace0),
             sequence::terminated(Self::string, Self::whitespace0),
             sequence::terminated(Self::bytes, Self::whitespace0),
-            sequence::terminated(Self::ident, Self::whitespace0).map(|id| match id {
-                "null" => Token::Value(Value::Null),
-                "true" => Token::Value(Value::Bool(true)),
-                "false" => Token::Value(Value::Bool(false)),
-                _ => Token::Ident(id),
-            }),
+            sequence::terminated(Self::ident_or_literal, Self::whitespace0),
         ))
         .parse(input)
     }

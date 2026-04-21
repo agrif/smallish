@@ -62,7 +62,9 @@
 //!    When using map-flavored *smallish*, the brackets around the
 //!    root map are omitted.
 //!
-//! * **Unit Structs** are written as `null`.
+//! * **Unit Structs** are written as `()`.
+//!
+//! * **None** is written `none`. This is used to represent [Option::None].
 //!
 //! * **Booleans** are written as `true` and `false`.
 //!
@@ -132,12 +134,12 @@
 //!
 //! ### Options
 //!
-//! Options are written as `null` for [None], and the value itself for
-//! [Some]. Note that this means `Some(())` is not representable.
+//! Options are written as `none` for [None], and the value itself for
+//! [Some].
 //!
 //! ```
 //! # use smallish::{Flavor, from_str};
-//! assert_eq!(from_str::<Option<u8>>(Flavor::Value, "null").unwrap(), None);
+//! assert_eq!(from_str::<Option<u8>>(Flavor::Value, "none").unwrap(), None);
 //! assert_eq!(from_str::<Option<u8>>(Flavor::Value, "20").unwrap(), Some(20));
 //! ```
 //!
@@ -256,8 +258,10 @@ impl core::fmt::Display for TokenKind {
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Value<'de> {
-    /// `null`
-    Null,
+    /// unit `()`
+    Unit,
+    /// `none`
+    None,
     /// `true` or `false`
     Bool(bool),
     /// integers
