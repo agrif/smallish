@@ -1,18 +1,56 @@
+/// A [Result] where both the [Ok] and [Err] contain a [Located].
+///
+/// See also [Located::from_result] and [Located::to_result] for
+/// flipping whether the [Located] is inside or outside of the
+/// [Result].
 pub type LocResult<'de, T, E> = Result<Located<'de, T>, Located<'de, E>>;
 
+/// A wrapper that annotates a value with its source location.
+///
+/// *smallish* uses this type to provide context to errors. Its
+/// implementation of [Display](core::fmt::Display) (and optionally
+/// `defmt::Format`) will format the wrapped object with a reference
+/// to the line of source attached to it.
+///
+/// ## Deserialization
+///
+/// This type modifies how deserialization works for the contained
+/// type. Types wrapped in `Located` will be annotated with their
+/// source location during deserialization. This can be useful to
+/// provide context for errors that can only be recognized after the
+/// entire object is deserialized.
+///
+/// ```
+/// # use smallish::{Flavor, from_str, types::Located};
+/// let r: Vec<Located<u8>> = from_str(Flavor::Value, "[10, 20, 30]").unwrap();
+/// assert_eq!(r[1].line, 1);
+/// assert_eq!(r[1].column, 5);
+/// assert_eq!(*r[1], 20);
+/// ```
+///
+/// The lifetime `'a` is the lifetime of the source itself. You can
+/// drop this source with [without_source](Located::without_source) to
+/// get a `'static` lifetime, at the cost of losing the full source
+/// context.
 #[derive(Clone, Copy, Eq, serde::Deserialize)]
 #[serde(rename = "__smallish_magic_located__")]
 pub struct Located<'a, T> {
+    /// The entire source for the location this value is attached to.
     pub source: Option<&'a [u8]>,
+    /// Line number, starting at 1.
     pub line: usize,
+    /// Column number, starting at 0.
     pub column: usize,
+    /// Offset into `self.source`.
     pub offset: usize,
+    /// The value wrapped by this `Located`.
     pub value: T,
 }
 
 impl Located<'static, ()> {
     pub(crate) const SERDE_NAME: &'static str = "__smallish_magic_located__";
 
+    /// Create a new, empty location, positioned at the start.
     pub const fn new() -> Self {
         Self {
             source: None,
@@ -25,11 +63,20 @@ impl Located<'static, ()> {
 }
 
 impl<'de, T> Located<'de, T> {
+    /// Get the line of source attached to this value.
+    ///
+    /// This can fail if the source is missing or is not valid
+    /// UTF-8. To get the bytes instead, see
+    /// [source_line_bytes](Self::source_line_bytes).
     pub fn source_line(&self) -> Option<&'de str> {
         self.source_line_bytes()
             .and_then(|s| core::str::from_utf8(s).ok())
     }
 
+    /// Get the line of source attached to this value, as bytes.
+    ///
+    /// This can fail if the source is missing. To get a `str`
+    /// instead, see [source_line](Self::source_line).
     pub fn source_line_bytes(&self) -> Option<&'de [u8]> {
         let source = self.source?;
         let start = source
@@ -70,6 +117,10 @@ impl<'de, T> Located<'de, T> {
         self.offset += amt;
     }
 
+    /// Wrap the given object in this location, returning a new `Located`.
+    ///
+    /// To replace the value without creating a new `Located`, see
+    /// [replace](Self::replace).
     pub fn wrap<U>(&self, value: U) -> Located<'de, U> {
         Located {
             source: self.source,
@@ -80,10 +131,15 @@ impl<'de, T> Located<'de, T> {
         }
     }
 
+    /// Replace the value contained in this `Located`.
+    ///
+    /// To create a new `Located` without modifying this one, see
+    /// [wrap](Self::wrap).
     pub fn replace<U>(self, value: U) -> Located<'de, U> {
         self.map(|_| value)
     }
 
+    /// Split this `Located` into a pure location and the contained value.
     pub fn split(self) -> (Located<'de, ()>, T) {
         (
             Located {
@@ -97,6 +153,7 @@ impl<'de, T> Located<'de, T> {
         )
     }
 
+    /// Run a function on the contained value, and replace it with the result.
     pub fn map<U>(self, f: impl FnOnce(T) -> U) -> Located<'de, U> {
         Located {
             source: self.source,
@@ -107,10 +164,15 @@ impl<'de, T> Located<'de, T> {
         }
     }
 
+    /// Attach a source string to this `Located`.
     pub fn with_source<'a>(self, source: Option<&'a [u8]>) -> Located<'a, T> {
         Located { source, ..self }
     }
 
+    /// Drop the source string from this `Located`.
+    ///
+    /// This makes the context less useful, but it also drops the
+    /// lifetime requirements.
     pub fn without_source(self) -> Located<'static, T> {
         Located {
             source: None,
@@ -120,6 +182,7 @@ impl<'de, T> Located<'de, T> {
 }
 
 impl<'de, T, E> Located<'de, Result<T, E>> {
+    /// Turn a `Result<Located<...>>` into a `Located<Result<...>>`.
     pub fn from_result(result: LocResult<'de, T, E>) -> Self {
         match result {
             Ok(t) => t.map(Ok),
@@ -127,6 +190,7 @@ impl<'de, T, E> Located<'de, Result<T, E>> {
         }
     }
 
+    /// Turn a `Located<Result<...>>` into a `Result<Located<...>>`.
     pub fn to_result(self) -> LocResult<'de, T, E> {
         let (loc, val) = self.split();
         match val {
