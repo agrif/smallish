@@ -159,7 +159,7 @@ where
     I::Item: core::fmt::Display,
 {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
-        let iter = self.iter.take().expect("FormatIter used more than once");
+        let iter = unwrap!(self.iter.take(), "FormatIter used more than once");
         let mut first = true;
         for part in iter {
             let sep = if !first { self.sep } else { "" };
