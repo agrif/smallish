@@ -224,7 +224,13 @@ impl<'de> Tokenizer<'de> {
     fn raw_ident(input: &[u8]) -> IResult<&[u8], &str> {
         sequence::terminated(
             combinator::verify(
-                bytes::take_while1(|c: u8| c.is_ascii_alphanumeric() || c == b'_'),
+                combinator::recognize((
+                    // might start with a \
+                    combinator::opt(character::char('\\')),
+                    // valid characters
+                    bytes::take_while1(|c: u8| c.is_ascii_alphanumeric() || c == b'_'),
+                )),
+                // should not start with a digit
                 |s: &[u8]| !s.get(0).map(u8::is_ascii_digit).unwrap_or(true),
             ),
             Self::token_boundary,
@@ -240,7 +246,8 @@ impl<'de> Tokenizer<'de> {
                 "none" => Token::Value(Value::None),
                 "true" => Token::Value(Value::Bool(true)),
                 "false" => Token::Value(Value::Bool(false)),
-                _ => Token::Ident(id),
+                s if s.starts_with("\\") => Token::Ident(&s[1..]),
+                s => Token::Ident(s),
             })
             .parse(input)
     }

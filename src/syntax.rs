@@ -102,6 +102,22 @@
 //! while map and list flavored *smallish* simply omit the enclosing
 //! braces for that root value.
 //!
+//! ## Reserved Names
+//!
+//! Some names, like `true`, `false`, and `none`, are used to
+//! represent values directly. If you need to use these names for an
+//! enumeration variant or a key name, escape it by prefixing it with
+//! `\`.
+//!
+//! ```
+//! # use smallish::{Flavor, from_str};
+//! #[derive(Debug, PartialEq, Eq, serde::Deserialize)]
+//! #[serde(rename_all = "snake_case")]
+//! enum MyBool { True, False }
+//!
+//! assert_eq!(MyBool::True, from_str(Flavor::Value, r#"\true"#).unwrap());
+//! ```
+//!
 //! ## Nested Enumerations and Precedence
 //!
 //! You can use parethesis `()` to enclose values. This is sometimes
