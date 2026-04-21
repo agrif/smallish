@@ -153,7 +153,10 @@ where
 
         match T::chunk.parse(self.input) {
             Ok((rest, chunk)) => {
-                assert!(rest.len() < self.input.len());
+                assert!(
+                    rest.len() < self.input.len(),
+                    "FragmentIterator did not make forward progress"
+                );
                 self.input = rest;
                 Some(Ok(chunk))
             }

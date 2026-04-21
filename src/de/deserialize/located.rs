@@ -145,7 +145,7 @@ where
                 seed.deserialize(&mut *self.de)
             }
             LocatedState::End => {
-                unreachable!();
+                unreachable!("end of Located");
             }
         }
     }
