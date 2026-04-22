@@ -2,7 +2,7 @@ use as_variant::as_variant;
 use serde::de;
 
 use crate::de::deserialize::{escaped, inline, located, Error};
-use crate::de::{ParseError, Parser, ParserState};
+use crate::de::{Parser, ParserState};
 use crate::syntax::{Event, Value};
 use crate::types::{Escaped, Located};
 use crate::Flavor;
@@ -62,16 +62,8 @@ where
     }
 
     fn finalize<T>(&mut self, mut result: Result<T, Error>) -> Result<T, Located<'de, Error>> {
-        if result.is_ok() {
-            if self.peeked.is_some() {
-                result = Err(Error::UnusedInput);
-            } else {
-                if let Err(ev) = self.parser.next() {
-                    if !matches!(*ev, ParseError::Eof) {
-                        result = Err(Error::UnusedInput);
-                    }
-                }
-            }
+        if result.is_ok() && (self.peeked.is_some() || !self.parser.is_eof()) {
+            result = Err(Error::UnusedInput);
         }
 
         result.map_err(|e| self.last_event_location.wrap(e))
