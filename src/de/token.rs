@@ -486,7 +486,7 @@ impl<'de> Tokenizer<'de> {
     }
 
     fn token<'a>(input: &'a [u8]) -> IResult<&'a [u8], Token<'a>> {
-        sequence::terminated(
+        let (i, tok) = sequence::terminated(
             branch::alt((
                 Self::newline,
                 Self::comma,
@@ -501,7 +501,12 @@ impl<'de> Tokenizer<'de> {
             )),
             Self::whitespace0,
         )
-        .parse(input)
+        .parse(input)?;
+        assert!(
+            i.len() < input.len(),
+            "Tokenizer did not make forward progress"
+        );
+        Ok((i, tok))
     }
 }
 
@@ -520,6 +525,11 @@ impl<'de> Iterator for Tokenizer<'de> {
 #[cfg(test)]
 mod test {
     use crate::types::Escaped;
+
+    #[test]
+    fn token_does_not_match_empty() {
+        assert!(super::Tokenizer::token(&[]).is_err());
+    }
 
     // parse and check expected tokens
     macro_rules! token_test {
