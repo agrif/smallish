@@ -38,13 +38,10 @@ impl<I> NomError<I> {
 }
 
 impl<I> error::ParseError<I> for NomError<I> {
-    fn from_error_kind(input: I, kind: error::ErrorKind) -> Self {
+    fn from_error_kind(input: I, _kind: error::ErrorKind) -> Self {
         Self {
             input,
-            error: match kind {
-                error::ErrorKind::Eof => TokenError::Eof,
-                _ => TokenError::UnknownToken,
-            },
+            error: TokenError::UnknownToken,
         }
     }
 
