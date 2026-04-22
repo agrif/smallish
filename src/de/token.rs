@@ -118,6 +118,7 @@ impl<'de> Tokenizer<'de> {
                 self.input = input;
                 Ok(r)
             }
+            // Incomplete should never occur, but we can catch it
             Err(nom::Err::Incomplete(_)) => Err(self.location.wrap(TokenError::UnknownToken)),
             Err(nom::Err::Error(e)) => {
                 // errors are recoverable and should point to token start
@@ -555,6 +556,36 @@ mod test {
         assert!(super::Tokenizer::token(&[]).is_err());
     }
 
+    #[test]
+    fn token_iterator() {
+        use super::{Token, Tokenizer};
+        let tokenizer = Tokenizer::new(" [ ]   ".as_ref());
+        for (i, tok) in tokenizer.enumerate() {
+            assert!(i < 2);
+            let tok = tok.unwrap();
+            if i == 0 {
+                assert_eq!(*tok, Token::ListOpen);
+            } else {
+                assert_eq!(*tok, Token::ListClose);
+            }
+        }
+    }
+
+    #[test]
+    fn token_iterator_error() {
+        use super::{Token, TokenError, Tokenizer};
+        let tokenizer = Tokenizer::new(" [ ?   ".as_ref());
+        for (i, tok) in tokenizer.enumerate() {
+            assert!(i < 2);
+            if i == 0 {
+                assert_eq!(*tok.unwrap(), Token::ListOpen);
+            } else {
+                assert_eq!(*tok.unwrap_err(), TokenError::UnknownToken);
+                break;
+            }
+        }
+    }
+
     // parse and check expected tokens
     macro_rules! token_test {
         ($(#[$attr:meta])* $name:ident, $src:literal $(,$tok:expr)* $(,)?) => {
@@ -702,6 +733,12 @@ mod test {
         Value(Integer(0b10)),
         Value(Integer(-0b11)),
         Value(Integer(0b111)),
+    );
+    any_tokens_test!(
+        #[should_panic(expected = "UnknownToken")]
+        val_int_huge,
+        // too big to fit (96 bits)
+        "   \n  0xffffffffffffffffffffffff ",
     );
 
     token_test!(
