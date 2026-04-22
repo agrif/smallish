@@ -89,6 +89,9 @@ impl<'de> Tokenizer<'de> {
     }
 
     /// Return `true` if there is no more input left.
+    ///
+    /// This is `true` if and only if the next event will be
+    /// `TokenError::Eof`.
     pub fn is_eof(&self) -> bool {
         self.input.is_empty()
     }

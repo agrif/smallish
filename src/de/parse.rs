@@ -138,6 +138,13 @@ where
     }
 
     /// Returns `true` if there is no input left.
+    ///
+    /// If this is `true`, the next event will be `ParseError::Eof`.
+    ///
+    /// Note that if this is `false`, this does *not* guarantee the
+    /// next event will not be `ParseError::Eof`. Sometimes the parser
+    /// can still consume some input before deciding the end has been
+    /// reached.
     pub fn is_eof(&self) -> bool {
         self.tokens.is_eof()
     }
