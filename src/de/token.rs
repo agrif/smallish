@@ -516,8 +516,6 @@ impl<'de> Iterator for Tokenizer<'de> {
 
 #[cfg(test)]
 mod test {
-    extern crate std;
-
     use crate::types::Escaped;
 
     // parse and check expected tokens
