@@ -588,6 +588,16 @@ mod test {
     token_test!(map_close, "  \n   }   ", MapClose);
     token_test!(map_empty, "  \n {  }   ", MapOpen, MapClose);
 
+    token_test!(comment, "  #  this is a comment \n ");
+    token_test!(comment_comma, "  #  this is a comment \n ,  ", Comma);
+    token_test!(
+        comment_tok_newline_tok,
+        " [ # com \n ] ",
+        ListOpen,
+        Newline,
+        ListClose,
+    );
+
     token_test!(ident, "   \n   ident", Ident("ident"));
     token_test!(ident_true, "   \n   \\true  ", Ident("true"));
     token_test!(ident_false, "   \n   \\false  ", Ident("false"));
