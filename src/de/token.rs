@@ -368,13 +368,13 @@ impl<'de> Tokenizer<'de> {
             ),
         ))
         .parse(input)
+        .map_err(|e| e.map(|e: NomError<_>| e.replace(TokenError::UnknownEscape)))
     }
 
     fn string_escape<'a>(input: &'a [u8]) -> IResult<&'a [u8], EscapedFragment<&'a str, char>> {
         Self::character_escape
             .map(EscapedFragment::Item)
             .parse(input)
-            .map_err(|e| e.map(|e: NomError<_>| e.replace(TokenError::UnknownEscape)))
     }
 
     pub(crate) fn string_chunk<'a>(
@@ -431,13 +431,13 @@ impl<'de> Tokenizer<'de> {
             ),
         ))
         .parse(input)
+        .map_err(|e| e.map(|e: NomError<_>| e.replace(TokenError::UnknownEscape)))
     }
 
     fn bytes_escape<'a>(input: &'a [u8]) -> IResult<&'a [u8], EscapedFragment<&'a [u8], u8>> {
         Self::single_byte_escape
             .map(EscapedFragment::Item)
             .parse(input)
-            .map_err(|e| e.map(|e: NomError<_>| e.replace(TokenError::UnknownEscape)))
     }
 
     pub(crate) fn bytes_chunk<'a>(
@@ -671,6 +671,16 @@ mod test {
         Value(Character('a')),
         Value(Character('A')),
         Value(Character('☃')),
+        Value(Character('🄯')),
+    );
+    token_test!(
+        #[should_panic(expected = "UnknownEscape")]
+        val_chars_escapes_invalid,
+        // \xf0 is not valid utf-8
+        r#"      'a' 'A' '\xf0' '🄯'"#,
+        Value(Character('a')),
+        Value(Character('A')),
+        Value(Character('?')),
         Value(Character('🄯')),
     );
 
