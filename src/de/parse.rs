@@ -146,7 +146,7 @@ where
     /// can still consume some input before deciding the end has been
     /// reached.
     pub fn is_eof(&self) -> bool {
-        self.tokens.is_eof()
+        self.unused_token.is_none() && self.tokens.is_eof()
     }
 
     fn unexpected(
