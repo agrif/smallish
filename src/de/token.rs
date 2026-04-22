@@ -6,15 +6,20 @@ use nom::{
 use crate::syntax::{Integer, Token, Value};
 use crate::types::{Escaped, EscapedFragment, LocResult, Located};
 
+/// Errors produced by [Tokenizer].
 #[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum TokenError {
+    /// End of file (there is no more input to consume).
     #[error("end of file")]
     Eof,
+    /// The tokenizer found something it didn't recognize.
     #[error("unknown token")]
     UnknownToken,
+    /// There is invalid utf-8 inside a string literal.
     #[error("invalid utf-8")]
     InvalidUtf8,
+    /// There is an invalid escape sequence inside a string or bytes literal.
     #[error("unknown escape sequence")]
     UnknownEscape,
 }
@@ -57,6 +62,9 @@ impl<I, E> error::FromExternalError<I, E> for NomError<I> {
 
 pub(crate) type IResult<I, O> = nom::IResult<I, O, NomError<I>>;
 
+/// Turn source into a stream of [Tokens](Token).
+///
+/// This type implements [Iterator], and can be used in a `for` loop.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Tokenizer<'de> {
@@ -65,6 +73,7 @@ pub struct Tokenizer<'de> {
 }
 
 impl<'de> Tokenizer<'de> {
+    /// Create a tokenizer operating on the given `input`.
     pub fn new(input: &'de [u8]) -> Self {
         let mut tokenizer = Self {
             input,
@@ -74,10 +83,12 @@ impl<'de> Tokenizer<'de> {
         tokenizer
     }
 
+    /// Return the location of the token to be parsed next.
     pub fn location(&self) -> &Located<'de, ()> {
         &self.location
     }
 
+    /// Return `true` if there is no more input left.
     pub fn is_eof(&self) -> bool {
         self.input.is_empty()
     }
@@ -112,10 +123,12 @@ impl<'de> Tokenizer<'de> {
         }
     }
 
+    /// Parse and return the next token in the stream.
     pub fn next(&mut self) -> LocResult<'de, Token<'de>, TokenError> {
         self.parse(Self::token)
     }
 
+    /// Parse and return the next token in the stream, without consuming it.
     pub fn peek(&mut self) -> LocResult<'de, Token<'de>, TokenError> {
         self.parse(combinator::peek(Self::token))
     }

@@ -4,23 +4,32 @@ use crate::syntax::{Event, Token, TokenKind};
 use crate::types::{LocResult, Located};
 use crate::Flavor;
 
+/// Errors produced by [Parser].
 #[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum ParseError {
+    /// End of file (there is no more input to consume).
     #[error("end of file")]
     Eof,
+    /// The tokenizer found something it didn't recognize.
     #[error("unknown token")]
     UnknownToken,
+    /// There is invalid utf-8 inside a string literal.
     #[error("invalid utf-8")]
     InvalidUtf8,
+    /// There is an invalid escape sequence inside a string or bytes literal.
     #[error("unknown escape sequence")]
     UnknownEscape,
+    /// The parser found a token it did not expect in this context.
     #[error("unexpected {0}, expected one of {choices}", choices=FormatIter::new(.1.iter(), ", "))]
     UnexpectedToken(TokenKind, &'static [TokenKind]),
+    /// The parser ran out of `state`.
     #[error("maximum recursion limit exceeded")]
     MaxRecursion,
+    /// There are unclosed or mismatched braces in the source.
     #[error("unmatched braces")]
     UnmatchedBraces,
+    /// There is an incomplete `key=value` pair.
     #[error("incomplete field")]
     IncompleteField,
 }
@@ -42,10 +51,15 @@ impl<'de> From<Located<'de, TokenError>> for Located<'de, ParseError> {
     }
 }
 
+/// Opaque struct to store state for [Parser].
+///
+/// This is used to allocate storage of the correct size for
+/// [Parser]. See [Parser::new] for details.
 #[derive(Clone, Copy, Default)]
 pub struct ParserState(State);
 
 impl ParserState {
+    /// Return a zeroed state, suitable for initializing statics.
     pub const fn zero() -> Self {
         Self(
             // Use all zeros so this can be placed in bss if needed.
@@ -73,6 +87,9 @@ enum State {
     Enum,
 }
 
+/// Turn source into a stream of [Events](Event).
+///
+/// This type implements [Iterator], and can be used in a `for` loop.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Parser<'de, S> {
@@ -88,6 +105,16 @@ impl<'de, S> Parser<'de, S>
 where
     S: AsRef<[ParserState]> + AsMut<[ParserState]>,
 {
+    /// Create a `flavor`-flavored parser operating on the given `input`.
+    ///
+    /// The `state` argument should be pointer to an array of
+    /// [ParserState], for example a mutable slice or non-empty
+    /// `Vec`. The size of this array correlates with how
+    /// deeply-nested this parser can go before it returns
+    /// [ParseError::MaxRecursion]. On average, it needs two elements
+    /// per nested value.
+    ///
+    /// It is safe to re-use this buffer without zeroing it before use.
     pub fn new(flavor: Flavor, input: &'de [u8], state: S) -> Self {
         let initial_state = match flavor {
             Flavor::Value => State::Value,
@@ -105,10 +132,12 @@ where
         }
     }
 
+    /// Return the location of the event to be parsed next.
     pub fn location(&self) -> &Located<'de, ()> {
         self.tokens.location()
     }
 
+    /// Returns `true` if there is no input left.
     pub fn is_eof(&self) -> bool {
         self.tokens.is_eof()
     }
@@ -396,6 +425,7 @@ where
         }
     }
 
+    /// Parses and returns the next [Event].
     pub fn next(&mut self) -> LocResult<'de, Event<'de>, ParseError> {
         if !self.initial_state_sent {
             self.initial_state_sent = true;

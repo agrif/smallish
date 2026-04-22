@@ -7,6 +7,11 @@ use crate::syntax::{Event, Value};
 use crate::types::{Escaped, Located};
 use crate::Flavor;
 
+/// Deserialize source into a value.
+///
+/// This is the implementation of [serde::de::Deserializer] for
+/// *smallish*. If the convenience functions aren't enough, you can
+/// use this directly.
 #[derive(Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Deserializer<'de, S> {
@@ -20,7 +25,21 @@ impl<'de, S> Deserializer<'de, S>
 where
     S: AsRef<[ParserState]> + AsMut<[ParserState]>,
 {
-    pub fn from_parser(parser: Parser<'de, S>, unescape: &'de mut [u8]) -> Self {
+    /// Create a new `flavor`-flavored deserializer operating on the
+    /// given `input`.
+    ///
+    /// See [Parser::new] for the meaning of the `state` argument.
+    ///
+    /// The `unescape` argument is a scratch buffer where strings and
+    /// bytes that contain escapes are un-escaped. If this buffer
+    /// fills completely, deserialization will fail with
+    /// [Error::BufferFull]. To avoid this, either provide a larger
+    /// buffer or use [Escaped].
+    ///
+    /// It is valid to provide an empty buffer for `unescape` if you
+    /// are certain your input will contain no string escapes.
+    pub fn new(flavor: Flavor, input: &'de [u8], state: S, unescape: &'de mut [u8]) -> Self {
+        let parser = Parser::new(flavor, input, state);
         Self {
             last_event_location: parser.location().clone(),
             parser: parser,
@@ -29,10 +48,11 @@ where
         }
     }
 
-    pub fn new(flavor: Flavor, input: &'de [u8], state: S, unescape: &'de mut [u8]) -> Self {
-        Self::from_parser(Parser::new(flavor, input, state), unescape)
-    }
-
+    /// Deserialize the `input` into a value.
+    ///
+    /// This is [T::deserialize](serde::Deserialize::deserialize), but
+    /// it also annotates any errors with their source location and
+    /// makes sure all input is consumed.
     pub fn deserialize<T>(&mut self) -> Result<T, Located<'de, Error>>
     where
         T: de::Deserialize<'de>,
