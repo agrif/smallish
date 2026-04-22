@@ -50,8 +50,18 @@ impl<I> error::ParseError<I> for NomError<I> {
     }
 }
 
-impl<I, E> error::FromExternalError<I, E> for NomError<I> {
-    fn from_external_error(input: I, kind: error::ErrorKind, _err: E) -> Self {
+impl<I> error::FromExternalError<I, NomError<I>> for NomError<I> {
+    fn from_external_error(_input: I, _kind: error::ErrorKind, err: NomError<I>) -> Self {
+        err
+    }
+}
+
+impl<I> error::FromExternalError<I, core::num::ParseIntError> for NomError<I> {
+    fn from_external_error(
+        input: I,
+        kind: error::ErrorKind,
+        _err: core::num::ParseIntError,
+    ) -> Self {
         use error::ParseError;
         Self::from_error_kind(input, kind)
     }
@@ -464,17 +474,34 @@ impl<'de> Tokenizer<'de> {
         sequence::delimited(
             character::char('\''),
             combinator::cut(branch::alt((
-                bytes::is_not("'\\").map_opt(|s: &[u8]| {
+                sequence::preceded(
+                    character::char('\\'),
+                    combinator::cut(Self::character_escape),
+                ),
+                bytes::take_until("'").map_res(|s: &[u8]| {
                     if s.len() > 4 {
-                        return None;
+                        return Err(NomError {
+                            input,
+                            error: TokenError::UnknownToken,
+                        });
                     }
-                    let s = core::str::from_utf8(s).ok()?;
-                    if s.chars().count() != 1 {
-                        return None;
+                    let s = core::str::from_utf8(s).map_err(|_| NomError {
+                        input: input.get(1..).unwrap_or(&[]),
+                        error: TokenError::InvalidUtf8,
+                    })?;
+                    let mut chars = s.chars();
+                    let c = chars.next().ok_or_else(|| NomError {
+                        input,
+                        error: TokenError::UnknownToken,
+                    });
+                    if chars.next().is_some() {
+                        return Err(NomError {
+                            input,
+                            error: TokenError::UnknownToken,
+                        });
                     }
-                    s.chars().next()
+                    c
                 }),
-                sequence::preceded(character::char('\\'), Self::character_escape),
             ))),
             character::char('\''),
         )
@@ -584,6 +611,12 @@ mod test {
         invalid_utf8_in_string,
         // invalid unicode inside a string is bad utf-8
         b"\n\n\"\xf0\"\n"
+    );
+    any_tokens_test!(
+        #[should_panic(expected = "InvalidUtf8")]
+        invalid_utf8_in_char,
+        // invalid unicode inside a character is bad utf-8
+        b"\n\n\'\xf0\'\n"
     );
     // invalid unicode in a bytes literal is fine
     any_tokens_test!(invalid_utf8_in_bytes, b"\n\nb\"\xf0\"\n");
@@ -704,6 +737,21 @@ mod test {
         Value(Character('A')),
         Value(Character('?')),
         Value(Character('🄯')),
+    );
+    any_tokens_test!(
+        #[should_panic(expected = "UnknownToken")]
+        val_char_empty,
+        "      '' "
+    );
+    any_tokens_test!(
+        #[should_panic(expected = "UnknownToken")]
+        val_char_too_many,
+        "      'aa' "
+    );
+    any_tokens_test!(
+        #[should_panic(expected = "UnknownToken")]
+        val_char_way_too_many,
+        "      'aaaaa' "
     );
 
     token_test!(
