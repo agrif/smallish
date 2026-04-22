@@ -14,8 +14,12 @@ jobs:
         with:
           components: miri rust-src
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools
+      - run: cargo +stable install cargo-llvm-cov
 
       - run: cargo +stable build --no-default-features --features "${{ matrix.features }}"
       - run: cargo +stable test --no-default-features --features "${{ matrix.features }}"
       - run: cargo +nightly miri test --no-default-features --features "${{ matrix.features }}"
+      - run: cargo +stable llvm-cov --no-default-features --features "${{ matrix.features }}"
       - run: cargo +stable build --examples --no-default-features --features "${{ matrix.features }}"
