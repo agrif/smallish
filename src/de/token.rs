@@ -1,6 +1,6 @@
 use nom::{
     branch, bytes::complete as bytes, character::complete as character, combinator, error, multi,
-    sequence, Parser,
+    number::complete as number, sequence, Parser,
 };
 
 use crate::syntax::{Integer, Token, Value};
@@ -307,8 +307,17 @@ impl<'de> Tokenizer<'de> {
     }
 
     fn float<'a>(input: &'a [u8]) -> IResult<&'a [u8], Token<'a>> {
-        sequence::terminated(nom::number::float(), Self::token_boundary)
-            .map(|f| Token::Value(Value::Float(f)))
+        // number::float works, but also accepts nan, inf, infinity
+        // (but not -inf, -infinity??)
+        // so, just do our own to only accept honest-to-god numbers and
+        // kick the exception can down the road
+        sequence::terminated(number::recognize_float, Self::token_boundary)
+            .map_opt(|f| {
+                // safety: recognize_float only matches valid utf-8
+                let f = unsafe { core::str::from_utf8_unchecked(f) };
+                let f = f.parse().ok()?;
+                Some(Token::Value(Value::Float(f)))
+            })
             .parse(input)
     }
 
