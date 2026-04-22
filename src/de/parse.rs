@@ -99,6 +99,7 @@ pub struct Parser<'de, S> {
     state_top: usize,
     unused_token: Option<Located<'de, Token<'de>>>,
     initial_state_sent: bool,
+    unused_event: Option<LocResult<'de, Event<'de>, ParseError>>,
 }
 
 impl<'de, S> Parser<'de, S>
@@ -129,24 +130,40 @@ where
             state_top: 0,
             unused_token: None,
             initial_state_sent: false,
+            unused_event: None,
         }
     }
 
     /// Return the location of the event to be parsed next.
-    pub fn location(&self) -> &Located<'de, ()> {
-        self.tokens.location()
+    pub fn location(&self) -> Located<'de, ()> {
+        if let Some(ev) = self.unused_event {
+            match ev {
+                Ok(v) => v.wrap(()),
+                Err(e) => e.wrap(()),
+            }
+        } else {
+            self.tokens.location()
+        }
     }
 
-    /// Returns `true` if there is no input left.
+    /// Returns `true` if and only if there is no input left.
     ///
-    /// If this is `true`, the next event will be `ParseError::Eof`.
-    ///
-    /// Note that if this is `false`, this does *not* guarantee the
-    /// next event will not be `ParseError::Eof`. Sometimes the parser
-    /// can still consume some input before deciding the end has been
-    /// reached.
-    pub fn is_eof(&self) -> bool {
-        self.unused_token.is_none() && self.tokens.is_eof()
+    /// This is `true` if and only if the next event will be
+    /// `ParseError::Eof`.
+    pub fn is_eof(&mut self) -> bool {
+        let decide = |ev: &LocResult<Event, ParseError>| match ev {
+            Ok(_) => false,
+            Err(e) => matches!(**e, ParseError::Eof),
+        };
+
+        if let Some(ev) = self.unused_event.as_ref() {
+            return decide(ev);
+        }
+
+        let ev = self.next();
+        let eof = decide(&ev);
+        self.unused_event = Some(ev);
+        eof
     }
 
     fn unexpected(
@@ -434,6 +451,10 @@ where
 
     /// Parses and returns the next [Event].
     pub fn next(&mut self) -> LocResult<'de, Event<'de>, ParseError> {
+        if let Some(ev) = self.unused_event.take() {
+            return ev;
+        }
+
         if !self.initial_state_sent {
             self.initial_state_sent = true;
             match self.initial_state {
@@ -529,11 +550,12 @@ mod test {
                 let mut state = [ParserState::zero(); 64];
                 let mut parser = Parser::new(Flavor::$flavor, $src.as_ref(), &mut state);
                 for ev in events {
+                    assert!(!parser.is_eof());
                     assert_eq!(*ev, *parser.next().unwrap());
                 }
 
-                assert_eq!(ParseError::Eof, *parser.next().unwrap_err());
                 assert!(parser.is_eof());
+                assert_eq!(ParseError::Eof, *parser.next().unwrap_err());
             }
         }
     }
@@ -553,8 +575,8 @@ mod test {
                 while !parser.is_eof() {
                     parser.next().unwrap();
                 }
-                assert_eq!(ParseError::Eof, *parser.next().unwrap_err());
                 assert!(parser.is_eof());
+                assert_eq!(ParseError::Eof, *parser.next().unwrap_err());
             }
         }
     }
@@ -607,6 +629,7 @@ mod test {
         Value,
         "  [ , ] ",
         ListOpen,
+        ListClose, // dummy
     );
     parse_test!(
         list_simple,
@@ -700,6 +723,7 @@ mod test {
         Value,
         "  { , } ",
         MapOpen,
+        MapClose, // dummy
     );
     parse_test!(
         map_simple,
@@ -728,6 +752,7 @@ mod test {
         " { a \n = 1 } ",
         MapOpen,
         Key("a"),
+        Value(None), // dummy
     );
     parse_test!(
         #[should_panic(expected = "UnexpectedToken")]
@@ -736,6 +761,7 @@ mod test {
         " { a = \n 1 } ",
         MapOpen,
         Key("a"),
+        Value(None), // dummy
     );
     parse_test!(
         map_newlines,
@@ -856,6 +882,7 @@ mod test {
         "  var , ",
         EnumOpen("var"),
         EnumClose,
+        Value(None), // dummy
     );
     parse_test!(
         enum_simple_seq,
@@ -896,6 +923,7 @@ mod test {
         EnumOpen("a"),
         EnumClose,
         EnumClose,
+        Value(None), // dummy
     );
     parse_test!(
         #[should_panic(expected = "UnexpectedToken")]
@@ -904,6 +932,7 @@ mod test {
         " var a = \n 1  ",
         EnumOpen("var"),
         Key("a"),
+        Value(None), // dummy
     );
     parse_test!(
         enum_newlines,

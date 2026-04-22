@@ -81,11 +81,11 @@ impl<'de> Tokenizer<'de> {
     }
 
     /// Return the location of the token to be parsed next.
-    pub fn location(&self) -> &Located<'de, ()> {
-        &self.location
+    pub fn location(&self) -> Located<'de, ()> {
+        self.location
     }
 
-    /// Return `true` if there is no more input left.
+    /// Return `true` if and only if there is no more input left.
     ///
     /// This is `true` if and only if the next event will be
     /// `TokenError::Eof`.
@@ -539,6 +539,7 @@ mod test {
                 let tokens: &[Token] = &[$($tok,)*];
                 let mut tokenizer = Tokenizer::new($src.as_ref());
                 for tok in tokens {
+                    assert!(!tokenizer.is_eof());
                     assert_eq!(*tok, *tokenizer.peek().unwrap());
                     assert_eq!(*tok, *tokenizer.next().unwrap());
                 }

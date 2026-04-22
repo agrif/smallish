@@ -41,7 +41,7 @@ where
     pub fn new(flavor: Flavor, input: &'de [u8], state: S, unescape: &'de mut [u8]) -> Self {
         let parser = Parser::new(flavor, input, state);
         Self {
-            last_event_location: parser.location().clone(),
+            last_event_location: parser.location(),
             parser: parser,
             peeked: None,
             unescape,
@@ -194,7 +194,7 @@ where
         if self.peeked.is_some() {
             self.last_event_location
         } else {
-            *self.parser.location()
+            self.parser.location()
         }
     }
 
