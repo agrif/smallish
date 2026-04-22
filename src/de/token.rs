@@ -486,18 +486,21 @@ impl<'de> Tokenizer<'de> {
     }
 
     fn token<'a>(input: &'a [u8]) -> IResult<&'a [u8], Token<'a>> {
-        branch::alt((
-            sequence::terminated(Self::newline, Self::whitespace0),
-            sequence::terminated(Self::comma, Self::whitespace0),
-            sequence::terminated(Self::unit, Self::whitespace0),
-            sequence::terminated(Self::symbol, Self::whitespace0),
-            sequence::terminated(Self::integer, Self::whitespace0),
-            sequence::terminated(Self::float, Self::whitespace0),
-            sequence::terminated(Self::character, Self::whitespace0),
-            sequence::terminated(Self::string, Self::whitespace0),
-            sequence::terminated(Self::bytes, Self::whitespace0),
-            sequence::terminated(Self::ident_or_literal, Self::whitespace0),
-        ))
+        sequence::terminated(
+            branch::alt((
+                Self::newline,
+                Self::comma,
+                Self::unit,
+                Self::symbol,
+                Self::integer,
+                Self::float,
+                Self::character,
+                Self::string,
+                Self::bytes,
+                Self::ident_or_literal,
+            )),
+            Self::whitespace0,
+        )
         .parse(input)
     }
 }
