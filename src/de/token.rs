@@ -510,3 +510,237 @@ impl<'de> Iterator for Tokenizer<'de> {
         }
     }
 }
+
+#[cfg(test)]
+mod test {
+    extern crate std;
+
+    use crate::types::Escaped;
+
+    // parse and check expected tokens
+    macro_rules! token_test {
+        ($(#[$attr:meta])* $name:ident, $src:literal $(,$tok:expr)* $(,)?) => {
+            #[test]
+            $(#[$attr])*
+            fn $name() {
+                #[allow(unused)]
+                use super::{Value::*, Token, Token::*, Tokenizer, TokenError};
+                let tokens: &[Token] = &[$($tok,)*];
+                let mut tokenizer = Tokenizer::new($src.as_ref());
+                for tok in tokens {
+                    assert_eq!(*tok, *tokenizer.peek().unwrap());
+                    assert_eq!(*tok, *tokenizer.next().unwrap());
+                }
+
+                assert!(tokenizer.is_eof());
+                assert_eq!(TokenError::Eof, *tokenizer.peek().unwrap_err());
+                assert_eq!(TokenError::Eof, *tokenizer.next().unwrap_err());
+            }
+        }
+    }
+
+    // parse all tokens, don't check them (but check errors)
+    macro_rules! any_tokens_test {
+        ($(#[$attr:meta])* $name:ident, $src:literal $(,)?) => {
+            #[test]
+            $(#[$attr])*
+            fn $name() {
+                #[allow(unused)]
+                use super::{Value::*, Token, Token::*, Tokenizer, TokenError};
+                let mut tokenizer = Tokenizer::new($src.as_ref());
+                while !tokenizer.is_eof() {
+                    tokenizer.next().unwrap();
+                }
+                assert!(tokenizer.is_eof());
+                assert_eq!(TokenError::Eof, *tokenizer.peek().unwrap_err());
+                assert_eq!(TokenError::Eof, *tokenizer.next().unwrap_err());
+            }
+        }
+    }
+
+    // just newlines get eaten at start
+    token_test!(newline, "\n\n\n");
+
+    any_tokens_test!(
+        #[should_panic(expected = "UnknownToken")]
+        invalid_utf8,
+        // invalid unicode outside a string is a bad token
+        b"\n\n\xf0\n"
+    );
+    any_tokens_test!(
+        #[should_panic(expected = "InvalidUtf8")]
+        invalid_utf8_in_string,
+        // invalid unicode inside a string is bad utf-8
+        b"\n\n\"\xf0\"\n"
+    );
+    // invalid unicode in a bytes literal is fine
+    any_tokens_test!(invalid_utf8_in_bytes, b"\n\nb\"\xf0\"\n");
+
+    token_test!(comma_newline, "\n\n  \n    ,   \n \n", Comma, Newline);
+    token_test!(equals, "    =   ", Equals);
+    token_test!(paren_open, "  \n  (      ", ParenOpen);
+    token_test!(paren_close, "  \n   )   ", ParenClose);
+    token_test!(list_open, "  \n  [      ", ListOpen);
+    token_test!(list_close, "  \n   ]   ", ListClose);
+    token_test!(list_empty, "  \n [  ]   ", ListOpen, ListClose);
+    token_test!(map_open, "  \n  {      ", MapOpen);
+    token_test!(map_close, "  \n   }   ", MapClose);
+    token_test!(map_empty, "  \n {  }   ", MapOpen, MapClose);
+
+    token_test!(ident, "   \n   ident", Ident("ident"));
+    token_test!(ident_true, "   \n   \\true  ", Ident("true"));
+    token_test!(ident_false, "   \n   \\false  ", Ident("false"));
+    token_test!(ident_none, "   \n   \\none  ", Ident("none"));
+    token_test!(
+        #[should_panic(expected = "UnknownToken")]
+        ident_number,
+        // idents should not start with numbers
+        "   \n   0ident  ",
+        Ident("0ident")
+    );
+    token_test!(
+        ident_number_escaped,
+        // escaped is fine to start with number
+        "   \n   \\0ident  ",
+        Ident("0ident")
+    );
+
+    token_test!(val_unit, "   \n   ()   ", Value(Unit));
+    token_test!(val_unit_space, "   \n   (      )   ", Value(Unit));
+    token_test!(
+        paren_newline_paren,
+        // anything but spaces between parens makes it not a unit
+        "   \n   (   \n  )   ",
+        ParenOpen,
+        Newline,
+        ParenClose,
+    );
+
+    token_test!(val_true, "   \n   true   ", Value(Bool(true)));
+    token_test!(val_false, "   \n   false   ", Value(Bool(false)));
+    token_test!(val_none, "   \n   none   ", Value(None));
+
+    token_test!(
+        val_ints,
+        "   \n  10 -20 +30",
+        Value(Integer(10)),
+        Value(Integer(-20)),
+        Value(Integer(30)),
+    );
+    token_test!(
+        val_ints_hex,
+        "   \n  0x10 -0x20 +0x30",
+        Value(Integer(0x10)),
+        Value(Integer(-0x20)),
+        Value(Integer(0x30)),
+    );
+    token_test!(
+        val_ints_oct,
+        "   \n  0o10 -0o20 +0o30",
+        Value(Integer(0o10)),
+        Value(Integer(-0o20)),
+        Value(Integer(0o30)),
+    );
+    token_test!(
+        val_ints_bin,
+        "   \n  0b10 -0b11 +0b111",
+        Value(Integer(0b10)),
+        Value(Integer(-0b11)),
+        Value(Integer(0b111)),
+    );
+
+    token_test!(
+        val_floats,
+        "  \n  1.2 -1.3 +1.4",
+        Value(Float(1.2)),
+        Value(Float(-1.3)),
+        Value(Float(1.4)),
+    );
+
+    token_test!(
+        val_floats_exp,
+        "  \n  1.2e1 -1.3E+3 +1.4e-2",
+        Value(Float(1.2e1)),
+        Value(Float(-1.3e+3)),
+        Value(Float(1.4e-2)),
+    );
+
+    token_test!(
+        val_chars,
+        r#"      'a' 'A' '\u{2603}' '🄯'"#,
+        Value(Character('a')),
+        Value(Character('A')),
+        Value(Character('☃')),
+        Value(Character('🄯')),
+    );
+
+    token_test!(
+        val_string,
+        r#"  "hello"    "there"    "#,
+        Value(String(Escaped::new("hello").unwrap())),
+        Value(String(Escaped::new("there").unwrap())),
+    );
+    token_test!(
+        val_string_escapes,
+        r#"  "hel\n\r\tlo"    "the\\\0\"\'re"    "#,
+        Value(String(Escaped::new("hel\\n\\r\\tlo").unwrap())),
+        Value(String(Escaped::new("the\\\\\\0\\\"\\\'re").unwrap())),
+    );
+    token_test!(
+        val_string_escapes_num,
+        r#"  "hel\x42lo"    "the\u{1234}re"    "#,
+        Value(String(Escaped::new("hel\\x42lo").unwrap())),
+        Value(String(Escaped::new("the\\u{1234}re").unwrap())),
+    );
+    token_test!(
+        #[should_panic(expected = "UnknownEscape")]
+        val_string_escapes_invalid,
+        // \xf2 is not valid utf-8
+        r#"  b"hel\xf2lo"    b"the\u{1234}re"    "#,
+        Value(Bytes(Escaped::new(&b"hel\\xf2lo"[..]).unwrap())),
+        Value(Bytes(Escaped::new(&b"the\\u{1234}12re"[..]).unwrap())),
+    );
+    token_test!(
+        val_string_multiline,
+        r#"  "hel
+lo"    "the
+re"    "#,
+        Value(String(Escaped::new("hel\nlo").unwrap())),
+        Value(String(Escaped::new("the\nre").unwrap())),
+    );
+
+    token_test!(
+        val_bytes,
+        r#"  b"hello"    b"there"    "#,
+        Value(Bytes(Escaped::new(&b"hello"[..]).unwrap())),
+        Value(Bytes(Escaped::new(&b"there"[..]).unwrap())),
+    );
+    token_test!(
+        val_bytes_escapes,
+        r#"  b"hel\n\r\tlo"    b"the\\\0\"\'re"    "#,
+        Value(Bytes(Escaped::new(&b"hel\\n\\r\\tlo"[..]).unwrap())),
+        Value(Bytes(Escaped::new(&b"the\\\\\\0\\\"\\\'re"[..]).unwrap())),
+    );
+    token_test!(
+        val_bytes_escapes_num,
+        r#"  b"hel\x42lo"    b"the\x12re"    "#,
+        Value(Bytes(Escaped::new(&b"hel\\x42lo"[..]).unwrap())),
+        Value(Bytes(Escaped::new(&b"the\\x12re"[..]).unwrap())),
+    );
+    token_test!(
+        #[should_panic(expected = "UnknownEscape")]
+        val_bytes_escapes_no_unicode,
+        // \u{...} not allowed in bytes
+        r#"  b"hel\x42lo"    b"the\u{1234}re"    "#,
+        Value(Bytes(Escaped::new(&b"hel\\x42lo"[..]).unwrap())),
+        Value(Bytes(Escaped::new(&b"the\\u{1234}12re"[..]).unwrap())),
+    );
+    token_test!(
+        val_bytes_multiline,
+        r#"  b"hel
+lo"    b"the
+re"    "#,
+        Value(Bytes(Escaped::new(&b"hel\nlo"[..]).unwrap())),
+        Value(Bytes(Escaped::new(&b"the\nre"[..]).unwrap())),
+    );
+}
