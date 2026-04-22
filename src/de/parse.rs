@@ -510,3 +510,502 @@ where
         }
     }
 }
+
+#[cfg(test)]
+mod test {
+    use crate::types::Escaped;
+
+    // parse and check expected events
+    macro_rules! parse_test {
+        ($(#[$attr:meta])* $name:ident, $flavor:ident, $src:literal $(,$ev:expr)* $(,)?) => {
+            #[test]
+            $(#[$attr])*
+            fn $name() {
+                #[allow(unused)]
+                use super::{Event, Event::*, Parser, ParseError, Flavor, ParserState};
+                #[allow(unused)]
+                use crate::syntax::Value::*;
+                let events: &[Event] = &[$($ev,)*];
+                let mut state = [ParserState::zero(); 64];
+                let mut parser = Parser::new(Flavor::$flavor, $src.as_ref(), &mut state);
+                for ev in events {
+                    assert_eq!(*ev, *parser.next().unwrap());
+                }
+
+                assert_eq!(ParseError::Eof, *parser.next().unwrap_err());
+                assert!(parser.is_eof());
+            }
+        }
+    }
+
+    // parse all events, don't check them (but check errors)
+    macro_rules! parse_all_test {
+        ($(#[$attr:meta])* $name:ident, $flavor:ident, $src:literal $(,)?) => {
+            #[test]
+            $(#[$attr])*
+            fn $name() {
+                #[allow(unused)]
+                use super::{Event, Event::*, Parser, ParseError, Flavor, ParserState};
+                #[allow(unused)]
+                use crate::syntax::Value::*;
+                let mut state = [ParserState::zero(); 64];
+                let mut parser = Parser::new(Flavor::$flavor, $src.as_ref(), &mut state);
+                while !parser.is_eof() {
+                    parser.next().unwrap();
+                }
+                assert_eq!(ParseError::Eof, *parser.next().unwrap_err());
+                assert!(parser.is_eof());
+            }
+        }
+    }
+
+    parse_all_test!(
+        #[should_panic(expected = "UnexpectedToken")]
+        bare_key,
+        Value,
+        "    key=0    ",
+    );
+    parse_all_test!(
+        #[should_panic(expected = "UnexpectedToken")]
+        bare_comma,
+        Value,
+        "    ,    ",
+    );
+    // newline is ok though
+    parse_all_test!(bare_newline, Value, "    \n    ");
+
+    // make sure newlines at end and beginning are ignored
+    parse_test!(newline_at_beginning, Value, " \n   0  ", Value(Integer(0)));
+    parse_test!(newline_at_end, Value, "   0  \n  ", Value(Integer(0)));
+
+    parse_test!(val_unit, Value, "   ()   ", Value(Unit));
+    parse_test!(val_none, Value, "   none   ", Value(None));
+    parse_test!(val_true, Value, "   true   ", Value(Bool(true)));
+    parse_test!(val_false, Value, "   false   ", Value(Bool(false)));
+    parse_test!(val_int, Value, "   42   ", Value(Integer(42)));
+    parse_test!(val_float, Value, "   42.1   ", Value(Float(42.1)));
+    parse_test!(val_char, Value, "   'A'   ", Value(Character('A')));
+    parse_test!(
+        val_string,
+        Value,
+        "   \"hello\"   ",
+        Value(String(Escaped::new("hello").unwrap()))
+    );
+    parse_test!(
+        val_bytes,
+        Value,
+        "   b\"hello\"   ",
+        Value(Bytes(Escaped::new(&b"hello"[..]).unwrap()))
+    );
+
+    parse_test!(list_empty, Value, "  []  ", ListOpen, ListClose);
+    parse_test!(list_empty_space, Value, "  [   ]  ", ListOpen, ListClose);
+    parse_test!(list_empty_newline, Value, "  [ \n ] ", ListOpen, ListClose);
+    parse_test!(
+        #[should_panic(expected = "UnexpectedToken")]
+        list_empty_comma,
+        Value,
+        "  [ , ] ",
+        ListOpen,
+    );
+    parse_test!(
+        list_simple,
+        Value,
+        " [1, 2, 3] ",
+        ListOpen,
+        Value(Integer(1)),
+        Value(Integer(2)),
+        Value(Integer(3)),
+        ListClose,
+    );
+    parse_test!(
+        list_trailing_comma,
+        Value,
+        " [1 , ] ",
+        ListOpen,
+        Value(Integer(1)),
+        ListClose,
+    );
+    parse_test!(
+        list_newlines,
+        Value,
+        " [1, \n 2 \n 3] ",
+        ListOpen,
+        Value(Integer(1)),
+        Value(Integer(2)),
+        Value(Integer(3)),
+        ListClose,
+    );
+    parse_test!(
+        list_compound,
+        Value,
+        " [[], {}, variant] ",
+        ListOpen,
+        ListOpen,
+        ListClose,
+        MapOpen,
+        MapClose,
+        EnumOpen("variant"),
+        EnumClose,
+        ListClose,
+    );
+    parse_test!(
+        list_flavor_simple,
+        List,
+        " 1, 2, 3 ",
+        ListOpen,
+        Value(Integer(1)),
+        Value(Integer(2)),
+        Value(Integer(3)),
+        ListClose,
+    );
+    parse_test!(
+        list_flavor_trailing_comma,
+        List,
+        " 1 ,  ",
+        ListOpen,
+        Value(Integer(1)),
+        ListClose,
+    );
+    parse_test!(
+        list_flavor_newlines,
+        List,
+        " 1, \n 2 \n 3 ",
+        ListOpen,
+        Value(Integer(1)),
+        Value(Integer(2)),
+        Value(Integer(3)),
+        ListClose,
+    );
+    parse_test!(
+        list_flavor_compound,
+        List,
+        " [], {}, variant  ",
+        ListOpen,
+        ListOpen,
+        ListClose,
+        MapOpen,
+        MapClose,
+        EnumOpen("variant"),
+        EnumClose,
+        ListClose,
+    );
+
+    parse_test!(map_empty, Value, "  {}  ", MapOpen, MapClose);
+    parse_test!(map_empty_space, Value, "  {   }  ", MapOpen, MapClose);
+    parse_test!(map_empty_newline, Value, "  { \n } ", MapOpen, MapClose);
+    parse_test!(
+        #[should_panic(expected = "UnexpectedToken")]
+        map_empty_comma,
+        Value,
+        "  { , } ",
+        MapOpen,
+    );
+    parse_test!(
+        map_simple,
+        Value,
+        " {a=1, b =  2} ",
+        MapOpen,
+        Key("a"),
+        Value(Integer(1)),
+        Key("b"),
+        Value(Integer(2)),
+        MapClose,
+    );
+    parse_test!(
+        map_trailing_comma,
+        Value,
+        " {a=1 , } ",
+        MapOpen,
+        Key("a"),
+        Value(Integer(1)),
+        MapClose,
+    );
+    parse_test!(
+        #[should_panic(expected = "UnexpectedToken")]
+        map_field_newline1,
+        Value,
+        " { a \n = 1 } ",
+        MapOpen,
+        Key("a"),
+    );
+    parse_test!(
+        #[should_panic(expected = "UnexpectedToken")]
+        map_field_newline2,
+        Value,
+        " { a = \n 1 } ",
+        MapOpen,
+        Key("a"),
+    );
+    parse_test!(
+        map_newlines,
+        Value,
+        " {a = 1, \n b = 2\n c = 3 } ",
+        MapOpen,
+        Key("a"),
+        Value(Integer(1)),
+        Key("b"),
+        Value(Integer(2)),
+        Key("c"),
+        Value(Integer(3)),
+        MapClose,
+    );
+    parse_test!(
+        map_compound,
+        Value,
+        " {a=[], b ={}, c= variant} ",
+        MapOpen,
+        Key("a"),
+        ListOpen,
+        ListClose,
+        Key("b"),
+        MapOpen,
+        MapClose,
+        Key("c"),
+        EnumOpen("variant"),
+        EnumClose,
+        MapClose,
+    );
+    parse_test!(
+        map_bare_enum,
+        Value,
+        " {a = enum} ",
+        MapOpen,
+        Key("a"),
+        EnumOpen("enum"),
+        EnumClose,
+        MapClose,
+    );
+    parse_test!(
+        map_bare_enum_arg,
+        Value,
+        " {a = enum 0} ",
+        MapOpen,
+        Key("a"),
+        EnumOpen("enum"),
+        Value(Integer(0)),
+        EnumClose,
+        MapClose,
+    );
+    parse_test!(
+        map_paren_enum_arg,
+        Value,
+        " {a = (enum 0)} ",
+        MapOpen,
+        Key("a"),
+        EnumOpen("enum"),
+        Value(Integer(0)),
+        EnumClose,
+        MapClose,
+    );
+    parse_test!(
+        map_flavor_simple,
+        Map,
+        " a=1, b =  2 ",
+        MapOpen,
+        Key("a"),
+        Value(Integer(1)),
+        Key("b"),
+        Value(Integer(2)),
+        MapClose,
+    );
+    parse_test!(
+        map_flavor_trailing_comma,
+        Map,
+        " a=1 ,  ",
+        MapOpen,
+        Key("a"),
+        Value(Integer(1)),
+        MapClose,
+    );
+    parse_test!(
+        map_flavor_newlines,
+        Map,
+        " a = 1, \n b = 2 \n c = 3  ",
+        MapOpen,
+        Key("a"),
+        Value(Integer(1)),
+        Key("b"),
+        Value(Integer(2)),
+        Key("c"),
+        Value(Integer(3)),
+        MapClose,
+    );
+    parse_test!(
+        map_flavor_compound,
+        Map,
+        " a = [], b={}, c =variant  ",
+        MapOpen,
+        Key("a"),
+        ListOpen,
+        ListClose,
+        Key("b"),
+        MapOpen,
+        MapClose,
+        Key("c"),
+        EnumOpen("variant"),
+        EnumClose,
+        MapClose,
+    );
+
+    parse_test!(enum_empty, Value, "  var  ", EnumOpen("var"), EnumClose);
+    parse_test!(
+        #[should_panic(expected = "UnexpectedToken")]
+        enum_empty_comma,
+        Value,
+        "  var , ",
+        EnumOpen("var"),
+        EnumClose,
+    );
+    parse_test!(
+        enum_simple_seq,
+        Value,
+        " var 1 2  ",
+        EnumOpen("var"),
+        Value(Integer(1)),
+        Value(Integer(2)),
+        EnumClose,
+    );
+    parse_test!(
+        enum_simple_map,
+        Value,
+        " var a=1 b=2  ",
+        EnumOpen("var"),
+        Key("a"),
+        Value(Integer(1)),
+        Key("b"),
+        Value(Integer(2)),
+        EnumClose,
+    );
+    parse_test!(
+        enum_simple_mixed,
+        Value,
+        " var 1 b=2  ",
+        EnumOpen("var"),
+        Value(Integer(1)),
+        Key("b"),
+        Value(Integer(2)),
+        EnumClose,
+    );
+    parse_test!(
+        #[should_panic(expected = "UnexpectedToken")]
+        enum_field_newline1,
+        Value,
+        " var a \n = 1  ",
+        EnumOpen("var"),
+        EnumOpen("a"),
+        EnumClose,
+        EnumClose,
+    );
+    parse_test!(
+        #[should_panic(expected = "UnexpectedToken")]
+        enum_field_newline2,
+        Value,
+        " var a = \n 1  ",
+        EnumOpen("var"),
+        Key("a"),
+    );
+    parse_test!(
+        enum_newlines,
+        Value,
+        " var 1 \n ",
+        EnumOpen("var"),
+        Value(Integer(1)),
+        EnumClose,
+    );
+    parse_test!(
+        enum_compound,
+        Value,
+        " var [] {} variant ",
+        EnumOpen("var"),
+        ListOpen,
+        ListClose,
+        MapOpen,
+        MapClose,
+        EnumOpen("variant"),
+        EnumClose,
+        EnumClose,
+    );
+    parse_test!(
+        enum_map_bare_enum,
+        Value,
+        " var a = enum ",
+        EnumOpen("var"),
+        Key("a"),
+        EnumOpen("enum"),
+        EnumClose,
+        EnumClose,
+    );
+    parse_test!(
+        enum_map_bare_enum_arg,
+        Value,
+        " var a = enum 0 ",
+        EnumOpen("var"),
+        Key("a"),
+        EnumOpen("enum"),
+        EnumClose,
+        Value(Integer(0)),
+        EnumClose,
+    );
+    parse_test!(
+        enum_map_paren_enum_arg,
+        Value,
+        " var a = (enum 0) ",
+        EnumOpen("var"),
+        Key("a"),
+        EnumOpen("enum"),
+        Value(Integer(0)),
+        EnumClose,
+        EnumClose,
+    );
+    parse_test!(
+        enum_seq_bare_enum,
+        Value,
+        " var enum ",
+        EnumOpen("var"),
+        EnumOpen("enum"),
+        EnumClose,
+        EnumClose,
+    );
+    parse_test!(
+        enum_seq_bare_enum_arg,
+        Value,
+        " var enum 0 ",
+        EnumOpen("var"),
+        EnumOpen("enum"),
+        EnumClose,
+        Value(Integer(0)),
+        EnumClose,
+    );
+    parse_test!(
+        enum_seq_paren_enum_arg,
+        Value,
+        " var (enum 0) ",
+        EnumOpen("var"),
+        EnumOpen("enum"),
+        Value(Integer(0)),
+        EnumClose,
+        EnumClose,
+    );
+    parse_test!(
+        enum_variant_none,
+        Value,
+        " \\none ",
+        EnumOpen("none"),
+        EnumClose,
+    );
+    parse_test!(
+        enum_variant_true,
+        Value,
+        " \\true ",
+        EnumOpen("true"),
+        EnumClose,
+    );
+    parse_test!(
+        enum_variant_false,
+        Value,
+        " \\false ",
+        EnumOpen("false"),
+        EnumClose,
+    );
+}
