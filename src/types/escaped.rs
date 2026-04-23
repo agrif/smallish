@@ -342,3 +342,138 @@ where
         slice
     }
 }
+
+#[cfg(test)]
+mod test {
+    #[test]
+    fn str_bad_escape() {
+        use super::{Escaped, TokenError};
+        assert_eq!(Escaped::new(r#"hello\?"#), Err(TokenError::UnknownEscape));
+    }
+
+    #[test]
+    fn bytes_bad_escape() {
+        use super::{Escaped, TokenError};
+        assert_eq!(
+            Escaped::new(br#"hello\?"#.as_ref()),
+            Err(TokenError::UnknownEscape)
+        );
+    }
+
+    #[test]
+    fn str_bad_escape_unchecked() {
+        use super::{Escaped, TokenError, UnescapeError};
+        let e = Escaped::new_unchecked(r#"\?"#);
+        let mut buf = [0; 128];
+        assert_eq!(Some(Err(TokenError::UnknownEscape)), e.fragments().next());
+        assert_eq!(
+            Err(UnescapeError::BadLiteral(TokenError::UnknownEscape)),
+            e.unescape(&mut buf)
+        );
+    }
+
+    #[test]
+    fn bytes_bad_escape_unchecked() {
+        use super::{Escaped, TokenError, UnescapeError};
+        let e = Escaped::new_unchecked(br#"\?"#.as_ref());
+        let mut buf = [0; 128];
+        assert_eq!(Some(Err(TokenError::UnknownEscape)), e.fragments().next());
+        assert_eq!(
+            Err(UnescapeError::BadLiteral(TokenError::UnknownEscape)),
+            e.unescape(&mut buf)
+        );
+    }
+
+    #[test]
+    fn str_buffer_full() {
+        use super::{Escaped, UnescapeError};
+        let mut buf = [0; 0];
+        let e = Escaped::new_unchecked(r#"hello\n"#);
+        assert_eq!(Err(UnescapeError::BufferFull), e.unescape(&mut buf));
+        let e = Escaped::new_unchecked(r#"\n"#);
+        assert_eq!(Err(UnescapeError::BufferFull), e.unescape(&mut buf));
+    }
+
+    #[test]
+    fn bytes_buffer_full() {
+        use super::{Escaped, UnescapeError};
+        let mut buf = [0; 0];
+        let e = Escaped::new_unchecked(br#"hello\n"#.as_ref());
+        assert_eq!(Err(UnescapeError::BufferFull), e.unescape(&mut buf));
+        let e = Escaped::new_unchecked(br#"\n"#.as_ref());
+        assert_eq!(Err(UnescapeError::BufferFull), e.unescape(&mut buf));
+    }
+
+    #[test]
+    fn as_escaped() {
+        use super::Escaped;
+        assert_eq!(42, Escaped::new_unchecked(42).as_escaped());
+    }
+
+    #[test]
+    fn deref() {
+        use super::Escaped;
+        let e = Escaped::new("hello").unwrap();
+        assert_eq!("hello", *e);
+    }
+
+    macro_rules! test_escape {
+        ($(#[$attr:meta])* $name:ident, $str:expr, $unescaped:literal $(,$frag:expr)* $(,)?) => {
+            #[test]
+            $(#[$attr])*
+            #[allow(unused_assignments)]
+            fn $name() {
+                #[allow(unused)]
+                use super::{Escaped, EscapedFragment::*};
+                let e = Escaped::new($str).unwrap();
+                let mut fragments = &[$($frag),*][..];
+                if false {
+                    // funny business to force the right type on fragments
+                    fragments = &[e.fragments().next().unwrap().unwrap()][..];
+                    fragments = &[];
+                }
+                let has_escapes = fragments.iter().any(|f| matches!(f, Item(_)));
+                assert_eq!(has_escapes, e.has_escapes());
+
+                let mut iter = e.fragments();
+                for frag in fragments {
+                    assert_eq!(Some(Ok(*frag)), iter.next());
+                }
+                assert_eq!(None, iter.next());
+
+                let mut buf = [0; 128];
+                let (_, s) = e.unescape(&mut buf).unwrap();
+                assert_eq!(s, $unescaped);
+            }
+        };
+    }
+
+    test_escape!(str_empty, r#""#, "");
+    test_escape!(str_plain, r#"hello"#, "hello", Slice("hello"));
+    test_escape!(str_escape, r#"\n"#, "\n", Item('\n'));
+    test_escape!(
+        str_mixed,
+        r#"hel\nlo"#,
+        "hel\nlo",
+        Slice("hel"),
+        Item('\n'),
+        Slice("lo")
+    );
+
+    test_escape!(bytes_empty, br#""#.as_ref(), b"");
+    test_escape!(
+        bytes_plain,
+        br#"hello"#.as_ref(),
+        b"hello",
+        Slice(b"hello".as_ref())
+    );
+    test_escape!(bytes_escape, br#"\n"#.as_ref(), b"\n", Item(b'\n'));
+    test_escape!(
+        bytes_mixed,
+        br#"hel\nlo"#.as_ref(),
+        b"hel\nlo",
+        Slice(b"hel".as_ref()),
+        Item(b'\n'),
+        Slice(b"lo".as_ref())
+    );
+}
