@@ -112,11 +112,18 @@ impl<T> Escaped<T> {
         T: Escapeable<B, I>,
         B: ?Sized,
     {
-        !matches!(
-            T::chunk.parse(T::as_bytes(self.0.borrow())),
-            // if there is a single slice chunk, it has no escapes
-            Ok((b"", EscapedFragment::Slice(_))),
-        )
+        let bytes = T::as_bytes(self.0.borrow());
+
+        // chunk always consumes some data, so we special-case empty strings
+        if bytes.is_empty() {
+            false
+        } else {
+            !matches!(
+                T::chunk.parse(bytes),
+                // if there is a single slice chunk, it has no escapes
+                Ok((b"", EscapedFragment::Slice(_))),
+            )
+        }
     }
 
     /// Iterate over the fragments inside this string or bytes.
