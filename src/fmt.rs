@@ -169,3 +169,15 @@ where
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod test {
+    #[test]
+    fn format_iter() {
+        extern crate alloc;
+        use super::FormatIter;
+        let iter = FormatIter::new(["hello", "world", "!"].into_iter(), ", ");
+        let s = alloc::format!("{}", iter);
+        assert_eq!(s, "hello, world, !");
+    }
+}
