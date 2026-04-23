@@ -39,12 +39,6 @@ macro_rules! define_enum_with_kind {
                     }
                 }
             }
-
-            impl $(<$life>)? From<$name $(<$life>)?> for [<$name Kind>] {
-                fn from(v: $name $(<$life>)?) -> [<$name Kind>] {
-                    v.kind()
-                }
-            }
         }
     };
 
