@@ -45,12 +45,6 @@ impl From<TokenError> for ParseError {
     }
 }
 
-impl<'de> From<Located<'de, TokenError>> for Located<'de, ParseError> {
-    fn from(other: Located<'de, TokenError>) -> Self {
-        other.map(Into::into)
-    }
-}
-
 /// Opaque struct to store state for [Parser].
 ///
 /// This is used to allocate storage of the correct size for
@@ -546,6 +540,46 @@ where
 mod test {
     use crate::types::Escaped;
 
+    #[test]
+    fn is_eof_then_location() {
+        use super::{Flavor, Parser, ParserState};
+        let mut state = [ParserState::zero(); 64];
+        let mut parser = Parser::new(Flavor::Value, b"[0]", &mut state);
+        let loc = parser.location();
+        assert!(!parser.is_eof());
+        assert_eq!(loc, parser.location());
+        assert!(parser.next().is_ok());
+        assert_ne!(loc, parser.location());
+    }
+
+    #[test]
+    fn is_eof_then_location_err() {
+        use super::{Flavor, Parser, ParserState};
+        let mut state = [ParserState::zero(); 64];
+        let mut parser = Parser::new(Flavor::Value, b"?0]", &mut state);
+        let loc = parser.location();
+        assert!(!parser.is_eof());
+        assert_eq!(loc, parser.location());
+        assert!(parser.next().is_err());
+    }
+
+    #[test]
+    fn max_recursion() {
+        use super::{Flavor, ParseError, Parser, ParserState};
+        let mut state = [ParserState::zero(); 2];
+        let parser = Parser::new(Flavor::Value, b"[[[]]]", &mut state);
+        for (i, ev) in parser.enumerate() {
+            if i >= 2 {
+                assert!(matches!(*ev.unwrap_err(), ParseError::MaxRecursion));
+                if i >= 5 {
+                    break;
+                }
+            } else {
+                assert!(ev.is_ok());
+            }
+        }
+    }
+
     // parse and check expected events
     macro_rules! parse_test {
         ($(#[$attr:meta])* $name:ident, $flavor:ident, $src:literal $(,$ev:expr)* $(,)?) => {
@@ -591,6 +625,27 @@ mod test {
         }
     }
 
+    // token error propogation
+    parse_all_test!(
+        #[should_panic(expected = "UnknownToken")]
+        unknown_token,
+        Value,
+        "   ?  ",
+    );
+    parse_all_test!(
+        #[should_panic(expected = "InvalidUtf8")]
+        invalid_utf8,
+        Value,
+        b"   '\xf0'  ",
+    );
+    parse_all_test!(
+        #[should_panic(expected = "UnknownEscape")]
+        unknown_escape,
+        Value,
+        "   '\\?'  ",
+    );
+
+    // invalid root things
     parse_all_test!(
         #[should_panic(expected = "UnexpectedToken")]
         bare_key,
@@ -606,11 +661,26 @@ mod test {
     // newline is ok though
     parse_all_test!(bare_newline, Value, "    \n    ");
 
+    // bad braces
+    parse_all_test!(
+        #[should_panic(expected = "UnmatchedBraces")]
+        unmatched_braces_close,
+        List,
+        "]",
+    );
+    parse_all_test!(
+        #[should_panic(expected = "UnmatchedBraces")]
+        unmatched_braces_open,
+        Value,
+        "[",
+    );
+
     // make sure newlines at end and beginning are ignored
     parse_test!(newline_at_beginning, Value, " \n   0  ", Value(Integer(0)));
     parse_test!(newline_at_end, Value, "   0  \n  ", Value(Integer(0)));
 
     parse_test!(val_unit, Value, "   ()   ", Value(Unit));
+    parse_test!(val_paren_unit, Value, "   ( \n ())   ", Value(Unit));
     parse_test!(val_none, Value, "   none   ", Value(None));
     parse_test!(val_true, Value, "   true   ", Value(Bool(true)));
     parse_test!(val_false, Value, "   false   ", Value(Bool(false)));
@@ -642,9 +712,18 @@ mod test {
         ListClose, // dummy
     );
     parse_test!(
+        #[should_panic(expected = "UnexpectedToken")]
+        list_two_values,
+        Value,
+        "  [ 0 0 ] ",
+        ListOpen,
+        Value(Integer(0)),
+        ListClose, // dummy
+    );
+    parse_test!(
         list_simple,
         Value,
-        " [1, 2, 3] ",
+        " [1, (2), 3] ",
         ListOpen,
         Value(Integer(1)),
         Value(Integer(2)),
@@ -733,6 +812,16 @@ mod test {
         Value,
         "  { , } ",
         MapOpen,
+        MapClose, // dummy
+    );
+    parse_test!(
+        #[should_panic(expected = "UnexpectedToken")]
+        map_two_values,
+        Value,
+        "  { a=0 b=1 } ",
+        MapOpen,
+        Key("a"),
+        Value(Integer(0)),
         MapClose, // dummy
     );
     parse_test!(
@@ -883,6 +972,15 @@ mod test {
         EnumClose,
         MapClose,
     );
+    parse_test!(
+        #[should_panic(expected = "IncompleteField")]
+        map_incomplete_field,
+        Map,
+        " a= ",
+        MapOpen,
+        Key("a"),
+        Value(None), // dummy
+    );
 
     parse_test!(enum_empty, Value, "  var  ", EnumOpen("var"), EnumClose);
     parse_test!(
@@ -1025,6 +1123,15 @@ mod test {
         Value(Integer(0)),
         EnumClose,
         EnumClose,
+    );
+    parse_test!(
+        #[should_panic(expected = "UnknownToken")]
+        enum_bare_ident_bad_tok,
+        Value,
+        " var enum ? ",
+        EnumOpen("var"),
+        EnumOpen("enum"),
+        Value(None), // dummy
     );
     parse_test!(
         enum_variant_none,
