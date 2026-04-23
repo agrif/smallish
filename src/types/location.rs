@@ -301,3 +301,183 @@ where
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod test {
+    #[test]
+    fn default_eq_const() {
+        use super::Located;
+        assert_eq!(Located::default(), Located::new());
+    }
+
+    #[test]
+    fn source_line_start() {
+        use super::Located;
+        let loc = Located {
+            source: Some(b"line 1\nline 2\nline 3".as_ref()),
+            line: 1,
+            column: 5,
+            offset: 5,
+            value: (),
+        };
+        assert_eq!(Some(b"line 1".as_ref()), loc.source_line_bytes());
+        assert_eq!(Some("line 1"), loc.source_line());
+
+        let loc = loc.without_source();
+        assert_eq!(None, loc.source_line_bytes());
+        assert_eq!(None, loc.source_line());
+    }
+
+    #[test]
+    fn source_line_middle() {
+        use super::Located;
+        let loc = Located {
+            source: Some(b"line 1\nline 2\nline 3".as_ref()),
+            line: 2,
+            column: 5,
+            offset: 12,
+            value: (),
+        };
+        assert_eq!(Some(b"line 2".as_ref()), loc.source_line_bytes());
+        assert_eq!(Some("line 2"), loc.source_line());
+
+        let loc = loc.without_source();
+        assert_eq!(None, loc.source_line_bytes());
+        assert_eq!(None, loc.source_line());
+    }
+
+    #[test]
+    fn source_line_end() {
+        use super::Located;
+        let loc = Located {
+            source: Some(b"line 1\nline 2\nline 3".as_ref()),
+            line: 3,
+            column: 5,
+            offset: 19,
+            value: (),
+        };
+        assert_eq!(Some(b"line 3".as_ref()), loc.source_line_bytes());
+        assert_eq!(Some("line 3"), loc.source_line());
+
+        let loc = loc.without_source();
+        assert_eq!(None, loc.source_line_bytes());
+        assert_eq!(None, loc.source_line());
+    }
+
+    #[test]
+    fn source_line_start_bad_utf8() {
+        use super::Located;
+        let loc = Located {
+            source: Some(b"line \xf1\nline 2\nline \xf3".as_ref()),
+            line: 1,
+            column: 5,
+            offset: 5,
+            value: (),
+        };
+        assert_eq!(Some(b"line \xf1".as_ref()), loc.source_line_bytes());
+        assert_eq!(None, loc.source_line());
+    }
+
+    #[test]
+    fn source_line_middle_bad_utf8() {
+        use super::Located;
+        let loc = Located {
+            source: Some(b"line \xf1\nline 2\nline \xf3".as_ref()),
+            line: 2,
+            column: 5,
+            offset: 12,
+            value: (),
+        };
+        assert_eq!(Some(b"line 2".as_ref()), loc.source_line_bytes());
+        assert_eq!(Some("line 2"), loc.source_line());
+    }
+
+    #[test]
+    fn source_line_end_bad_utf8() {
+        use super::Located;
+        let loc = Located {
+            source: Some(b"line \xf1\nline 2\nline \xf3".as_ref()),
+            line: 3,
+            column: 5,
+            offset: 19,
+            value: (),
+        };
+        assert_eq!(Some(b"line \xf3".as_ref()), loc.source_line_bytes());
+        assert_eq!(None, loc.source_line());
+    }
+
+    #[test]
+    fn advance_simple() {
+        use super::Located;
+        let mut loc = Located {
+            source: None,
+            line: 3,
+            column: 5,
+            offset: 10,
+            value: (),
+        };
+        loc.advance(b"this is source", b"is source");
+        assert_eq!(loc.line, 3);
+        assert_eq!(loc.column, 5 + 5);
+        assert_eq!(loc.offset, 10 + 5);
+    }
+
+    #[test]
+    fn advance_line() {
+        use super::Located;
+        let mut loc = Located {
+            source: None,
+            line: 3,
+            column: 5,
+            offset: 10,
+            value: (),
+        };
+        loc.advance(b"this\nis source", b"source");
+        assert_eq!(loc.line, 3 + 1);
+        assert_eq!(loc.column, 3);
+        assert_eq!(loc.offset, 10 + 8);
+    }
+
+    #[test]
+    fn advance_lines() {
+        use super::Located;
+        let mut loc = Located {
+            source: None,
+            line: 3,
+            column: 5,
+            offset: 10,
+            value: (),
+        };
+        loc.advance(b"this\nis\nsource", b"source");
+        assert_eq!(loc.line, 3 + 2);
+        assert_eq!(loc.column, 0);
+        assert_eq!(loc.offset, 10 + 8);
+    }
+
+    #[test]
+    fn deref_and_mut() {
+        use super::Located;
+        let mut loc = Located::new().replace(42);
+        assert_eq!(42, *loc);
+        *loc += 1;
+        assert_eq!(43, *loc);
+    }
+
+    #[test]
+    fn display() {
+        extern crate alloc;
+        use super::Located;
+        let loc = Located {
+            source: Some(b"line 1\nline 2\nline 3".as_ref()),
+            line: 2,
+            column: 5,
+            offset: 12,
+            value: "FOO",
+        };
+
+        let s = alloc::format!("{}", loc);
+        assert!(s.find("2:5").is_some());
+        assert!(s.find("line 2").is_some());
+        assert!(s.find("FOO").is_some());
+    }
+}
