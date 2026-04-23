@@ -34,3 +34,4 @@ thiserror = { version = "2", default-features = false }
 
 [dev-dependencies]
 serde = { version = "1", default-features = true, features = ["derive"] }
+serde_bytes = "0.11"

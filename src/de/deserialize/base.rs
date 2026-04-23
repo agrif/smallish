@@ -702,3 +702,316 @@ where
         seed.deserialize(&mut *self.de)
     }
 }
+
+#[cfg(test)]
+mod test {
+    extern crate alloc;
+    extern crate std;
+
+    macro_rules! de_test {
+        ($(#[$attr:meta])* $name:ident, $flavor:ident, $src:expr, $val:expr $(, $ty:ty)? $(,)?) => {
+            #[test]
+            $(#[$attr])*
+            fn $name() {
+                use super::{Flavor};
+                use crate::from_slice_escaped;
+                let mut buf = [0; 128];
+                let v $(: $ty)? = from_slice_escaped(
+                    Flavor::$flavor,
+                    $src.as_ref(),
+                    &mut buf,
+                ).unwrap();
+                assert_eq!($val, v);
+            }
+        };
+    }
+
+    de_test!(
+        #[should_panic(expected = "UnusedInput")]
+        unused_input,
+        Value,
+        "  () \n  () ",
+        (),
+    );
+
+    #[derive(Debug, PartialEq, Eq, serde::Deserialize)]
+    struct MyUnit;
+
+    de_test!(val_unit, Value, "  ()  \n ", ());
+    de_test!(val_unit_struct, Value, "  ()  \n ", MyUnit);
+    de_test!(val_option_unit, Value, " \n ()   \n ", Some(()));
+    de_test!(val_option_none, Value, " \n none   \n ", None, Option<()>);
+    de_test!(val_true, Value, "   true \n ", true);
+    de_test!(val_false, Value, "   false \n ", false);
+
+    macro_rules! int_test {
+        ($uprim:ident, $iprim:ident, $s:literal, $n: expr, $ibig:literal) => {
+            int_test!(
+                $uprim,
+                $iprim,
+                $s,
+                $n,
+                $ibig,
+                "IntegerRange",
+                "IntegerRange"
+            );
+        };
+        ($uprim:ident, $iprim:ident, $s:literal, $n: expr, $ibig:literal, $uerror:literal, $ierror: literal) => {
+            paste::paste! {
+                de_test!([<val_ $uprim>], Value, concat!(" ", $s, " \n "), $n as $uprim);
+                de_test!([<val_ $iprim>], Value, concat!(" -", $s, " \n "), -$n as $iprim);
+                de_test!(
+                    #[should_panic(expected = $uerror)]
+                    [<val_ $uprim _range_error>],
+                    Value,
+                    concat!(" -", $s, " \n "),
+                    $n as $uprim, // dummy
+                    $uprim,
+                );
+                de_test!(
+                    #[should_panic(expected = $ierror)]
+                    [<val_ $iprim _range_error>],
+                    Value,
+                    concat!(" ", $ibig, " \n "),
+                    $n as $iprim, // dummy
+                    $iprim,
+                );
+            }
+        };
+    }
+
+    int_test!(u8, i8, "42", 42, "0x80");
+    int_test!(u16, i16, "42", 42, "0x8000");
+    int_test!(u32, i32, "42", 42, "0x80000000");
+    int_test!(
+        u64,
+        i64,
+        "42",
+        42,
+        "0x8000000000000000",
+        "IntegerRange",
+        "UnknownToken"
+    );
+    int_test!(
+        u128,
+        i128,
+        "42",
+        42,
+        "0x80000000000000000000000000000000",
+        "IntegerRange",
+        "UnknownToken"
+    );
+
+    de_test!(
+        val_f32,
+        Value,
+        "  1.2000000476837158 \n ",
+        1.2000000476837158,
+        f32
+    );
+    de_test!(
+        val_f64,
+        Value,
+        "  1.2000000476837158 \n ",
+        1.2000000476837158,
+        f64
+    );
+
+    de_test!(val_char, Value, "  'A' \n ", 'A', char);
+
+    de_test!(val_str, Value, r#" "hello" "#, "hello", &str);
+    de_test!(val_str_escape, Value, r#" "\n" "#, "\n", &str);
+    de_test!(
+        val_str_mixed,
+        Value,
+        r#" "hello\nworld" "#,
+        "hello\nworld",
+        &str,
+    );
+    de_test!(
+        val_string,
+        Value,
+        r#" "hello" "#,
+        "hello",
+        alloc::string::String
+    );
+    #[test]
+    fn val_str_buffer_full() {
+        use super::{Error, Flavor};
+        use crate::from_slice_escaped;
+        let mut buf = [0; 0];
+        let e = from_slice_escaped::<&str>(Flavor::Value, br#" "\n" "#, &mut buf).unwrap_err();
+        assert_eq!(Error::BufferFull, *e);
+    }
+
+    de_test!(val_bytes, Value, r#" b"hello" "#, b"hello", &[u8]);
+    de_test!(val_bytes_escape, Value, r#" b"\n" "#, b"\n", &[u8]);
+    de_test!(
+        val_bytes_mixed,
+        Value,
+        r#" b"hello\nworld" "#,
+        b"hello\nworld",
+        &[u8],
+    );
+    #[test]
+    fn val_byte_buf() {
+        use super::Flavor;
+        use crate::from_slice_escaped;
+        use serde_bytes::ByteBuf;
+        let v: ByteBuf = from_slice_escaped(Flavor::Value, br#" b"hello" "#, &mut []).unwrap();
+        assert_eq!(b"hello".as_ref(), v.into_vec());
+    }
+    #[test]
+    fn val_bytes_buffer_full() {
+        use super::{Error, Flavor};
+        use crate::from_slice_escaped;
+        let mut buf = [0; 0];
+        let e = from_slice_escaped::<&[u8]>(Flavor::Value, br#" b"\n" "#, &mut buf).unwrap_err();
+        assert_eq!(Error::BufferFull, *e);
+    }
+
+    #[derive(Debug, PartialEq, Eq, serde::Deserialize)]
+    struct NewtypeStruct(u8);
+    de_test!(newtype_struct, Value, "  42 \n ", NewtypeStruct(42));
+
+    de_test!(
+        seq,
+        List,
+        "  1 \n 2, 3 \n ",
+        [1, 2, 3].as_ref(),
+        alloc::vec::Vec<u8>
+    );
+
+    de_test!(tuple, List, " 1 \n 2, 3 \n ", (1, 2, 3), (u8, u8, u8));
+
+    #[derive(Debug, PartialEq, Eq, serde::Deserialize)]
+    struct TupleStruct(u8, u8, u8);
+    de_test!(tuple_struct, List, " 1 \n 2, 3 \n ", TupleStruct(1, 2, 3));
+
+    de_test!(
+        map,
+        Map,
+        " a = 1 \n b=2 \n ",
+        [("a", 1u8), ("b", 2)].into_iter()
+            .collect::<std::collections::HashMap<&str, u8>>(),
+        std::collections::HashMap<&str, u8>,
+    );
+
+    #[derive(Debug, PartialEq, Eq, serde::Deserialize)]
+    struct Struct {
+        a: u8,
+        b: u8,
+    }
+    de_test!(
+        plain_struct,
+        Map,
+        " a = 1 \n b=2 \n ",
+        Struct { a: 1, b: 2 }
+    );
+
+    #[derive(Debug, PartialEq, Eq, serde::Deserialize)]
+    enum Enum {
+        UnitVariant,
+        NewtypeVariantSimple(u8),
+        NewtypeVariantMap(Struct),
+        NewtypeVariantSeq(TupleStruct),
+        TupleVariant(char, char),
+        StructVariant { foo: char, bar: char },
+        NewtypeVariantTuple((char, char)),
+        NewtypeVariantNewtype(NewtypeStruct),
+    }
+    de_test!(enum_unit, Value, " UnitVariant \n ", Enum::UnitVariant);
+    de_test!(
+        enum_newtype_simple,
+        Value,
+        " NewtypeVariantSimple 42 \n ",
+        Enum::NewtypeVariantSimple(42),
+    );
+    de_test!(
+        enum_newtype_map,
+        Value,
+        " NewtypeVariantMap a=1 b=2 \n ",
+        Enum::NewtypeVariantMap(Struct { a: 1, b: 2 }),
+    );
+    de_test!(
+        enum_newtype_seq,
+        Value,
+        " NewtypeVariantSeq 1 2 3 \n ",
+        Enum::NewtypeVariantSeq(TupleStruct(1, 2, 3)),
+    );
+    de_test!(
+        enum_tuple,
+        Value,
+        " TupleVariant 'a' 'b' \n ",
+        Enum::TupleVariant('a', 'b'),
+    );
+    de_test!(
+        enum_struct,
+        Value,
+        " StructVariant foo='a' bar='b' \n ",
+        Enum::StructVariant { foo: 'a', bar: 'b' },
+    );
+    de_test!(
+        enum_newtype_tuple,
+        Value,
+        " NewtypeVariantTuple 'a' 'b' \n ",
+        Enum::NewtypeVariantTuple(('a', 'b')),
+    );
+    de_test!(
+        enum_newtype_newtype,
+        Value,
+        " NewtypeVariantNewtype 42 \n ",
+        Enum::NewtypeVariantNewtype(NewtypeStruct(42)),
+    );
+
+    #[derive(Debug, PartialEq, serde::Deserialize)]
+    struct PartialStruct {
+        a: u8,
+        b: serde::de::IgnoredAny,
+    }
+    de_test!(
+        ignored_any_simple,
+        Map,
+        " b = 3 \n a = 42 ",
+        PartialStruct {
+            a: 42,
+            b: Default::default()
+        }
+    );
+    de_test!(
+        ignored_any_seq,
+        Map,
+        " b = [1, 2] \n a = 42 ",
+        PartialStruct {
+            a: 42,
+            b: Default::default()
+        }
+    );
+    de_test!(
+        ignored_any_map,
+        Map,
+        " b = {foo=1, bar=2} \n a = 42 ",
+        PartialStruct {
+            a: 42,
+            b: Default::default()
+        }
+    );
+    de_test!(
+        ignored_any_enum,
+        Map,
+        " b = variant 3 \n a = 42 ",
+        PartialStruct {
+            a: 42,
+            b: Default::default()
+        }
+    );
+    de_test!(
+        ignored_any_deep,
+        Map,
+        " b = {foo=[{bar=[1, 2, 3]}], bar=variant []} \n a = 42 ",
+        PartialStruct {
+            a: 42,
+            b: Default::default()
+        }
+    );
+}
