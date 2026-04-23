@@ -267,15 +267,6 @@ impl<T> core::ops::Deref for Escaped<T> {
     }
 }
 
-impl<T> core::fmt::Display for Escaped<T>
-where
-    T: core::fmt::Display,
-{
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
 /// Types that are suitable to be wrapped in [Escaped].
 ///
 /// This trait is sealed, meaning it can only be implemented by this
