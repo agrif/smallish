@@ -121,15 +121,15 @@ impl<'de> Tokenizer<'de> {
             // Incomplete should never occur, but we can catch it
             Err(nom::Err::Incomplete(_)) => Err(self.location.wrap(TokenError::UnknownToken)),
             Err(nom::Err::Error(e)) => {
-                // errors are recoverable and should point to token start
+                // errors should point to token start
                 let r = self.location.wrap(e.error);
-                self.location.advance(self.input, e.input);
                 Err(r)
             }
             Err(nom::Err::Failure(e)) => {
                 // failures are specific to exactly where they failed
-                self.location.advance(self.input, e.input);
-                Err(self.location.wrap(e.error))
+                let mut loc = self.location.clone();
+                loc.advance(self.input, e.input);
+                Err(loc.replace(e.error))
             }
         }
     }
@@ -576,12 +576,13 @@ mod test {
         use super::{Token, TokenError, Tokenizer};
         let tokenizer = Tokenizer::new(" [ ?   ".as_ref());
         for (i, tok) in tokenizer.enumerate() {
-            assert!(i < 2);
             if i == 0 {
                 assert_eq!(*tok.unwrap(), Token::ListOpen);
             } else {
                 assert_eq!(*tok.unwrap_err(), TokenError::UnknownToken);
-                break;
+                if i > 5 {
+                    break;
+                }
             }
         }
     }

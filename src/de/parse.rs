@@ -451,10 +451,20 @@ where
 
     /// Parses and returns the next [Event].
     pub fn next(&mut self) -> LocResult<'de, Event<'de>, ParseError> {
-        if let Some(ev) = self.unused_event.take() {
-            return ev;
+        let ev = self
+            .unused_event
+            .take()
+            .unwrap_or_else(|| self.next_inner());
+
+        // keep errors around and constantly return them once they happen
+        if ev.is_err() {
+            self.unused_event = Some(ev.clone());
         }
 
+        ev
+    }
+
+    pub fn next_inner(&mut self) -> LocResult<'de, Event<'de>, ParseError> {
         if !self.initial_state_sent {
             self.initial_state_sent = true;
             match self.initial_state {
