@@ -95,9 +95,8 @@ impl<'de, T> Located<'de, T> {
     }
 
     pub(crate) fn advance(&mut self, start: &'de [u8], end: &'de [u8]) {
-        if start.len() < end.len() {
-            return;
-        }
+        // this should be a cheap subslice check, but this works for now
+        assert!(end.len() <= start.len(), "bad start/end to advance");
 
         let new = &start[..start.len() - end.len()];
         let amt = new.len();
