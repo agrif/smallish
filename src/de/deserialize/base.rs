@@ -1057,6 +1057,216 @@ mod test {
     );
 
     #[derive(Debug, PartialEq, serde::Deserialize)]
+    #[serde(tag = "type")]
+    enum InternalEnum {
+        StructVariant { c: u8, d: u8 },
+        NewtypeVariant(Struct),
+        EnumInEnum { foo: Enum },
+    }
+    de_test!(
+        internally_tagged_struct,
+        Value,
+        " {type=StructVariant, c=1, d=2} \n ",
+        InternalEnum::StructVariant { c: 1, d: 2 },
+    );
+    de_test!(
+        internally_tagged_newtype,
+        Value,
+        " {type=NewtypeVariant, a=1, b=2} \n ",
+        InternalEnum::NewtypeVariant(Struct { a: 1, b: 2 }),
+    );
+    de_test!(
+        internally_tagged_nested_enum_unit,
+        Value,
+        " {type=EnumInEnum, foo=UnitVariant} \n ",
+        InternalEnum::EnumInEnum {
+            foo: Enum::UnitVariant,
+        },
+    );
+    de_test!(
+        internally_tagged_nested_enum_tuple,
+        Value,
+        " {type=EnumInEnum, foo=(TupleVariant 'a' 'b')} \n ",
+        InternalEnum::EnumInEnum {
+            foo: Enum::TupleVariant('a', 'b'),
+        },
+    );
+    de_test!(
+        internally_tagged_nested_enum_struct,
+        Value,
+        " {type=EnumInEnum, foo=(StructVariant foo='a' bar='b')} \n ",
+        InternalEnum::EnumInEnum {
+            foo: Enum::StructVariant { foo: 'a', bar: 'b' },
+        },
+    );
+    de_test!(
+        #[should_panic(expected = "InvalidType")]
+        internally_tagged_nested_enum_vec_empty_fails,
+        Value,
+        " {type=EnumInEnum, foo=NewtypeVec} \n ",
+        InternalEnum::EnumInEnum {
+            foo: Enum::NewtypeVec(alloc::vec![]),
+        },
+    );
+    de_test!(
+        internally_tagged_nested_enum_vec_some,
+        Value,
+        " {type=EnumInEnum, foo=(NewtypeVec 1 2)} \n ",
+        InternalEnum::EnumInEnum {
+            foo: Enum::NewtypeVec(alloc::vec![1, 2]),
+        },
+    );
+
+    #[derive(Debug, PartialEq, serde::Deserialize)]
+    #[serde(tag = "t", content = "c")]
+    enum AdjacentEnum {
+        StructVariant { c: u8, d: u8 },
+        TupleVariant(u8, u8),
+        NewtypeSimple(u8),
+        NewtypeVariant(Struct),
+        EnumInEnum { foo: Enum },
+    }
+    de_test!(
+        adjacently_tagged_struct,
+        Value,
+        " {t=StructVariant, c={c=1, d=2}} \n ",
+        AdjacentEnum::StructVariant { c: 1, d: 2 },
+    );
+    de_test!(
+        adjacently_tagged_tuple,
+        Value,
+        " {t=TupleVariant, c=[1, 2]} \n ",
+        AdjacentEnum::TupleVariant(1, 2),
+    );
+    de_test!(
+        adjacently_tagged_simple,
+        Value,
+        " {t=NewtypeSimple, c=42} \n ",
+        AdjacentEnum::NewtypeSimple(42),
+    );
+    de_test!(
+        adjacently_tagged_newtype,
+        Value,
+        " {t=NewtypeVariant, c={a=1, b=2}} \n ",
+        AdjacentEnum::NewtypeVariant(Struct { a: 1, b: 2 }),
+    );
+    de_test!(
+        adjacently_tagged_nested_enum_unit,
+        Value,
+        " {t=EnumInEnum, c={foo=UnitVariant}} \n ",
+        AdjacentEnum::EnumInEnum {
+            foo: Enum::UnitVariant,
+        },
+    );
+    de_test!(
+        adjacently_tagged_nested_enum_tuple,
+        Value,
+        " {t=EnumInEnum, c={foo=(TupleVariant 'a' 'b')}} \n ",
+        AdjacentEnum::EnumInEnum {
+            foo: Enum::TupleVariant('a', 'b'),
+        },
+    );
+    de_test!(
+        adjacently_tagged_nested_enum_struct,
+        Value,
+        " {t=EnumInEnum, c={foo=(StructVariant foo='a' bar='b')}} \n ",
+        AdjacentEnum::EnumInEnum {
+            foo: Enum::StructVariant { foo: 'a', bar: 'b' },
+        },
+    );
+    de_test!(
+        adjacently_tagged_nested_enum_vec_empty,
+        Value,
+        " {t=EnumInEnum, c={foo=NewtypeVec}} \n ",
+        AdjacentEnum::EnumInEnum {
+            foo: Enum::NewtypeVec(alloc::vec![]),
+        },
+    );
+    de_test!(
+        adjacently_tagged_nested_enum_vec_some,
+        Value,
+        " {t=EnumInEnum, c={foo=(NewtypeVec 1 2)}} \n ",
+        AdjacentEnum::EnumInEnum {
+            foo: Enum::NewtypeVec(alloc::vec![1, 2]),
+        },
+    );
+
+    #[derive(Debug, PartialEq, serde::Deserialize)]
+    #[serde(untagged)]
+    enum UntaggedEnum {
+        StructVariant { c: u8, d: u8 },
+        TupleVariant(u8, u8),
+        NewtypeSimple(u8),
+        NewtypeVariant(Struct),
+        EnumInEnum { foo: Enum },
+    }
+    de_test!(
+        untagged_struct,
+        Value,
+        " {c=1, d=2} \n ",
+        UntaggedEnum::StructVariant { c: 1, d: 2 },
+    );
+    de_test!(
+        untagged_tagged_tuple,
+        Value,
+        " [1, 2] \n ",
+        UntaggedEnum::TupleVariant(1, 2),
+    );
+    de_test!(
+        untagged_simple,
+        Value,
+        " 42 \n ",
+        UntaggedEnum::NewtypeSimple(42),
+    );
+    de_test!(
+        untagged_newtype,
+        Value,
+        " {a=1, b=2} \n ",
+        UntaggedEnum::NewtypeVariant(Struct { a: 1, b: 2 }),
+    );
+    de_test!(
+        untagged_nested_enum_unit,
+        Value,
+        " {foo=UnitVariant} \n ",
+        UntaggedEnum::EnumInEnum {
+            foo: Enum::UnitVariant,
+        },
+    );
+    de_test!(
+        untagged_nested_enum_tuple,
+        Value,
+        " {foo=(TupleVariant 'a' 'b')} \n ",
+        UntaggedEnum::EnumInEnum {
+            foo: Enum::TupleVariant('a', 'b'),
+        },
+    );
+    de_test!(
+        untagged_nested_enum_struct,
+        Value,
+        " {foo=(StructVariant foo='a' bar='b')} \n ",
+        UntaggedEnum::EnumInEnum {
+            foo: Enum::StructVariant { foo: 'a', bar: 'b' },
+        },
+    );
+    de_test!(
+        #[should_panic(expected = "Custom")]
+        untagged_nested_enum_vec_empty_fails,
+        Value,
+        " {foo=NewtypeVec} \n ",
+        UntaggedEnum::EnumInEnum {
+            foo: Enum::NewtypeVec(alloc::vec![]),
+        },
+    );
+    de_test!(
+        untagged_nested_enum_vec_some,
+        Value,
+        " {foo=(NewtypeVec 1 2)} \n ",
+        UntaggedEnum::EnumInEnum {
+            foo: Enum::NewtypeVec(alloc::vec![1, 2]),
+        },
+    );
+
+    #[derive(Debug, PartialEq, serde::Deserialize)]
     struct PartialStruct {
         a: u8,
         b: serde::de::IgnoredAny,
