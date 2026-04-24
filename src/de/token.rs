@@ -135,12 +135,12 @@ impl<'de> Tokenizer<'de> {
     }
 
     /// Parse and return the next token in the stream.
-    pub fn next(&mut self) -> LocResult<'de, Token<'de>, TokenError> {
+    pub fn next_token(&mut self) -> LocResult<'de, Token<'de>, TokenError> {
         self.parse(Self::token)
     }
 
     /// Parse and return the next token in the stream, without consuming it.
-    pub fn peek(&mut self) -> LocResult<'de, Token<'de>, TokenError> {
+    pub fn peek_token(&mut self) -> LocResult<'de, Token<'de>, TokenError> {
         self.parse(combinator::peek(Self::token))
     }
 
@@ -535,7 +535,7 @@ impl<'de> Iterator for Tokenizer<'de> {
     type Item = LocResult<'de, Token<'de>, TokenError>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        match self.next() {
+        match self.next_token() {
             Ok(ev) => Some(Ok(ev)),
             Err(e) if matches!(*e, TokenError::Eof) => None,
             Err(e) => Some(Err(e)),
@@ -595,13 +595,13 @@ mod test {
                 let mut tokenizer = Tokenizer::new($src.as_ref());
                 for tok in tokens {
                     assert!(!tokenizer.is_eof());
-                    assert_eq!(*tok, *tokenizer.peek().unwrap());
-                    assert_eq!(*tok, *tokenizer.next().unwrap());
+                    assert_eq!(*tok, *tokenizer.peek_token().unwrap());
+                    assert_eq!(*tok, *tokenizer.next_token().unwrap());
                 }
 
                 assert!(tokenizer.is_eof());
-                assert_eq!(TokenError::Eof, *tokenizer.peek().unwrap_err());
-                assert_eq!(TokenError::Eof, *tokenizer.next().unwrap_err());
+                assert_eq!(TokenError::Eof, *tokenizer.peek_token().unwrap_err());
+                assert_eq!(TokenError::Eof, *tokenizer.next_token().unwrap_err());
             }
         }
     }
@@ -616,11 +616,11 @@ mod test {
                 use super::{Value::*, Token, Token::*, Tokenizer, TokenError};
                 let mut tokenizer = Tokenizer::new($src.as_ref());
                 while !tokenizer.is_eof() {
-                    tokenizer.next().unwrap();
+                    tokenizer.next_token().unwrap();
                 }
                 assert!(tokenizer.is_eof());
-                assert_eq!(TokenError::Eof, *tokenizer.peek().unwrap_err());
-                assert_eq!(TokenError::Eof, *tokenizer.next().unwrap_err());
+                assert_eq!(TokenError::Eof, *tokenizer.peek_token().unwrap_err());
+                assert_eq!(TokenError::Eof, *tokenizer.next_token().unwrap_err());
             }
         }
     }

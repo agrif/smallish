@@ -154,7 +154,7 @@ where
             return decide(ev);
         }
 
-        let ev = self.next();
+        let ev = self.next_event();
         let eof = decide(&ev);
         self.unused_event = Some(ev);
         eof
@@ -408,7 +408,7 @@ where
                     Ok(Some(Event::MapOpen))
                 }
                 Token::Ident(name) => {
-                    let (subloc, subtok) = Located::from_result(self.tokens.next()).split();
+                    let (subloc, subtok) = Located::from_result(self.tokens.next_token()).split();
                     match subtok {
                         // careful: ident might be a bare enum in enum context,
                         // so look for equals
@@ -442,11 +442,11 @@ where
     }
 
     /// Parses and returns the next [Event].
-    pub fn next(&mut self) -> LocResult<'de, Event<'de>, ParseError> {
+    pub fn next_event(&mut self) -> LocResult<'de, Event<'de>, ParseError> {
         let ev = self
             .unused_event
             .take()
-            .unwrap_or_else(|| self.next_inner());
+            .unwrap_or_else(|| self.next_event_inner());
 
         // keep errors around and constantly return them once they happen
         if ev.is_err() {
@@ -456,7 +456,7 @@ where
         ev
     }
 
-    fn next_inner(&mut self) -> LocResult<'de, Event<'de>, ParseError> {
+    fn next_event_inner(&mut self) -> LocResult<'de, Event<'de>, ParseError> {
         if !self.initial_state_sent {
             self.initial_state_sent = true;
             match self.initial_state {
@@ -474,7 +474,7 @@ where
             let tok = if let Some(tok) = self.unused_token.take() {
                 Ok(tok)
             } else {
-                self.tokens.next()
+                self.tokens.next_token()
             };
             let (loc, tok) = Located::from_result(tok).split();
             let tok = match tok {
@@ -524,7 +524,7 @@ where
     type Item = LocResult<'de, Event<'de>, ParseError>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        match self.next() {
+        match self.next_event() {
             Ok(ev) => Some(Ok(ev)),
             Err(e) if matches!(*e, ParseError::Eof) => None,
             Err(e) => Some(Err(e)),
@@ -544,7 +544,7 @@ mod test {
         let loc = parser.location();
         assert!(!parser.is_eof());
         assert_eq!(loc, parser.location());
-        assert!(parser.next().is_ok());
+        assert!(parser.next_event().is_ok());
         assert_ne!(loc, parser.location());
     }
 
@@ -556,7 +556,7 @@ mod test {
         let loc = parser.location();
         assert!(!parser.is_eof());
         assert_eq!(loc, parser.location());
-        assert!(parser.next().is_err());
+        assert!(parser.next_event().is_err());
     }
 
     #[test]
@@ -591,11 +591,11 @@ mod test {
                 let mut parser = Parser::new(Flavor::$flavor, $src.as_ref(), &mut state);
                 for ev in events {
                     assert!(!parser.is_eof());
-                    assert_eq!(*ev, *parser.next().unwrap());
+                    assert_eq!(*ev, *parser.next_event().unwrap());
                 }
 
                 assert!(parser.is_eof());
-                assert_eq!(ParseError::Eof, *parser.next().unwrap_err());
+                assert_eq!(ParseError::Eof, *parser.next_event().unwrap_err());
             }
         }
     }
@@ -613,10 +613,10 @@ mod test {
                 let mut state = [ParserState::zero(); 64];
                 let mut parser = Parser::new(Flavor::$flavor, $src.as_ref(), &mut state);
                 while !parser.is_eof() {
-                    parser.next().unwrap();
+                    parser.next_event().unwrap();
                 }
                 assert!(parser.is_eof());
-                assert_eq!(ParseError::Eof, *parser.next().unwrap_err());
+                assert_eq!(ParseError::Eof, *parser.next_event().unwrap_err());
             }
         }
     }

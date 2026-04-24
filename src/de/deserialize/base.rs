@@ -154,7 +154,7 @@ where
             return Ok(ev);
         }
 
-        let next = self.parser.next();
+        let next = self.parser.next_event();
         let (loc, ev) = Located::from_result(next).split();
         self.last_event_location = loc;
 
@@ -167,7 +167,7 @@ where
             return Ok(ev);
         }
 
-        let next = self.parser.next();
+        let next = self.parser.next_event();
         let (loc, ev) = Located::from_result(next).split();
         self.last_event_location = loc;
 
