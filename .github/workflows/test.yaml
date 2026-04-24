@@ -6,7 +6,9 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        features: ["", "defmt", "custom-error-messages", "defmt,custom-error-messages"]
+        features: [",", "defmt", "custom-error-messages", "defmt,custom-error-messages"]
+    env:
+      FEATURES: --no-default-features --features ${{ matrix.features }}
     steps:
       - uses: actions/checkout@v5
 
@@ -18,21 +20,21 @@ jobs:
           components: clippy llvm-tools
       - run: cargo +stable install cargo-llvm-cov
 
-      - run: cargo +stable build --no-default-features --features "${{ matrix.features }}"
+      - run: cargo +stable build $FEATURES
         env:
           RUSTFLAGS: "-D warnings"
-      - run: cargo +stable test --no-default-features --features "${{ matrix.features }}"
+      - run: cargo +stable test $FEATURES
         env:
           RUSTFLAGS: "-D warnings"
-      - run: cargo +nightly miri test --no-default-features --features "${{ matrix.features }}"
-      - run: cargo +stable llvm-cov --no-default-features --features "${{ matrix.features }}"
-      - run: cargo +stable build --examples --no-default-features --features "${{ matrix.features }}"
+      - run: cargo +nightly miri test $FEATURES
+      - run: cargo +stable llvm-cov $FEATURES
+      - run: cargo +stable build $FEATURES
         env:
           RUSTFLAGS: "-D warnings"
-      - run: cargo +stable doc --no-default-features --features "${{ matrix.features }}"
+      - run: cargo +stable doc $FEATURES
         env:
           RUSTFLAGS: "-D warnings"
           RUSTDOCFLAGS: "-D warnings"
-      - run: cargo +stable clippy --no-default-features --features "${{ matrix.features }}"
+      - run: cargo +stable clippy $FEATURES
         env:
           RUSTFLAGS: "-D warnings"
