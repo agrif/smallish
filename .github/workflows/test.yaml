@@ -28,9 +28,6 @@ jobs:
           RUSTFLAGS: "-D warnings"
       - run: cargo +nightly miri test $FEATURES
       - run: cargo +stable llvm-cov $FEATURES
-      - run: cargo +stable build $FEATURES
-        env:
-          RUSTFLAGS: "-D warnings"
       - run: cargo +stable doc $FEATURES
         env:
           RUSTFLAGS: "-D warnings"
