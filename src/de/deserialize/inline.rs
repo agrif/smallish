@@ -19,6 +19,7 @@ impl<'a, 'de, De> SmallishDe<'de> for &mut InlineHandler<'a, De>
 where
     for<'b> &'b mut De: SmallishDe<'de>,
 {
+    #[inline]
     fn base(self) -> impl SmallishDe<'de> {
         self.de.base()
     }
