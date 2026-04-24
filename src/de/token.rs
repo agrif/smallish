@@ -139,11 +139,6 @@ impl<'de> Tokenizer<'de> {
         self.parse(Self::token)
     }
 
-    /// Parse and return the next token in the stream, without consuming it.
-    pub fn peek_token(&mut self) -> LocResult<'de, Token<'de>, TokenError> {
-        self.parse(combinator::peek(Self::token))
-    }
-
     fn parse_utf8<'a, P>(
         mut parser: P,
     ) -> impl Parser<&'a [u8], Error = NomError<&'a [u8]>, Output = &'a str>
@@ -595,12 +590,10 @@ mod test {
                 let mut tokenizer = Tokenizer::new($src.as_ref());
                 for tok in tokens {
                     assert!(!tokenizer.is_eof());
-                    assert_eq!(*tok, *tokenizer.peek_token().unwrap());
                     assert_eq!(*tok, *tokenizer.next_token().unwrap());
                 }
 
                 assert!(tokenizer.is_eof());
-                assert_eq!(TokenError::Eof, *tokenizer.peek_token().unwrap_err());
                 assert_eq!(TokenError::Eof, *tokenizer.next_token().unwrap_err());
             }
         }
@@ -619,7 +612,6 @@ mod test {
                     tokenizer.next_token().unwrap();
                 }
                 assert!(tokenizer.is_eof());
-                assert_eq!(TokenError::Eof, *tokenizer.peek_token().unwrap_err());
                 assert_eq!(TokenError::Eof, *tokenizer.next_token().unwrap_err());
             }
         }
