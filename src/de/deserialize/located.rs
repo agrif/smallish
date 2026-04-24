@@ -77,7 +77,7 @@ where
         V: de::Visitor<'de>,
     {
         // only called on Option<&'de [u8]> for source
-        if let Some(_) = self.location.source {
+        if self.location.source.is_some() {
             visitor.visit_some(self)
         } else {
             visitor.visit_none()

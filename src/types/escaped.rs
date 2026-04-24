@@ -276,7 +276,7 @@ impl<T> core::ops::Deref for Escaped<T> {
 pub trait Escapeable<Slice: ?Sized, Item>: SealedEscapeable<Slice, Item> {}
 
 trait SealedEscapeable<Slice: ?Sized, Item>: Borrow<Slice> {
-    fn chunk<'a>(input: &'a [u8]) -> IResult<&'a [u8], EscapedFragment<&'a Slice, Item>>;
+    fn chunk(input: &[u8]) -> IResult<&[u8], EscapedFragment<&Slice, Item>>;
 
     fn as_bytes(slice: &Slice) -> &[u8];
 
@@ -293,7 +293,7 @@ impl<T> SealedEscapeable<str, char> for T
 where
     T: Borrow<str>,
 {
-    fn chunk<'a>(input: &'a [u8]) -> IResult<&'a [u8], EscapedFragment<&'a str, char>> {
+    fn chunk(input: &[u8]) -> IResult<&[u8], EscapedFragment<&str, char>> {
         Tokenizer::string_chunk(input)
     }
 
@@ -322,7 +322,7 @@ impl<T> SealedEscapeable<[u8], u8> for T
 where
     T: Borrow<[u8]>,
 {
-    fn chunk<'a>(input: &'a [u8]) -> IResult<&'a [u8], EscapedFragment<&'a [u8], u8>> {
+    fn chunk(input: &[u8]) -> IResult<&[u8], EscapedFragment<&[u8], u8>> {
         Tokenizer::bytes_chunk(input)
     }
 

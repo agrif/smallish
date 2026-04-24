@@ -120,7 +120,7 @@ where
         Self {
             tokens: Tokenizer::new(input),
             initial_state,
-            state: state,
+            state,
             state_top: 0,
             unused_token: None,
             initial_state_sent: false,
@@ -303,13 +303,11 @@ where
                 t => self.unexpected(t, &[ParenOpen, ListOpen, MapOpen, Ident, Value]),
             },
 
-            State::BareEnum => match tok {
-                _ => {
-                    self.pop()?;
-                    self.unused_token = Some(loc.wrap(tok));
-                    Ok(Some(Event::EnumClose))
-                }
-            },
+            State::BareEnum => {
+                self.pop()?;
+                self.unused_token = Some(loc.wrap(tok));
+                Ok(Some(Event::EnumClose))
+            }
 
             State::ListItem => match tok {
                 Token::Newline => Ok(None),
@@ -452,7 +450,7 @@ where
 
         // keep errors around and constantly return them once they happen
         if ev.is_err() {
-            self.unused_event = Some(ev.clone());
+            self.unused_event = Some(ev);
         }
 
         ev
@@ -484,13 +482,11 @@ where
                 Err(e) => match e.into() {
                     ParseError::Eof => {
                         let val = match self.only_stack_state() {
-                            Some(state) if matches!(state, State::Enum | State::BareEnum) => {
+                            Some(State::Enum | State::BareEnum) => {
                                 let _ = self.pop();
                                 Ok(Event::EnumClose)
                             }
-                            Some(state)
-                                if matches!(state, State::FieldEquals | State::FieldValue) =>
-                            {
+                            Some(State::FieldEquals | State::FieldValue) => {
                                 Err(ParseError::IncompleteField)
                             }
                             Some(_) => Err(ParseError::UnmatchedBraces),

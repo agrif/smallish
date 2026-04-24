@@ -42,7 +42,7 @@ where
         let parser = Parser::new(flavor, input, state);
         Self {
             last_event_location: parser.location(),
-            parser: parser,
+            parser,
             peeked: None,
             unescape,
         }
@@ -163,8 +163,8 @@ where
     }
 
     fn peek(self) -> Result<Event<'de>, Error> {
-        if let Some(ev) = &self.peeked {
-            return Ok(ev.clone());
+        if let Some(ev) = self.peeked {
+            return Ok(ev);
         }
 
         let next = self.parser.next();
@@ -172,7 +172,7 @@ where
         self.last_event_location = loc;
 
         let ev = ev?;
-        self.peeked = Some(ev.clone());
+        self.peeked = Some(ev);
         Ok(ev)
     }
 
@@ -350,7 +350,7 @@ where
         let v = self.next_with(|t| {
             as_variant!(t, Event::Value).and_then(as_variant!(Value::Integer(v) => v))
         })?;
-        let v = v.try_into().map_err(|_| Error::IntegerRange(v))?;
+        let v = v.into();
         visitor.visit_i128(v)
     }
 
@@ -382,7 +382,7 @@ where
         let v = self.next_with(|t| {
             as_variant!(t, Event::Value).and_then(as_variant!(Value::Float(v) => v))
         })?;
-        let v = v.try_into().map_err(|_| Error::FloatRange(v))?;
+        let v = v.into();
         visitor.visit_f64(v)
     }
 
@@ -407,7 +407,7 @@ where
         if !v.has_escapes() {
             visitor.visit_borrowed_str(*v)
         } else {
-            let unescape = core::mem::replace(&mut self.unescape, &mut []);
+            let unescape = core::mem::take(&mut self.unescape);
             let (unescape, v) = v.unescape(unescape)?;
             self.unescape = unescape;
             visitor.visit_borrowed_str(v)
@@ -432,7 +432,7 @@ where
         if !v.has_escapes() {
             visitor.visit_borrowed_bytes(*v)
         } else {
-            let unescape = core::mem::replace(&mut self.unescape, &mut []);
+            let unescape = core::mem::take(&mut self.unescape);
             let (unescape, v) = v.unescape(unescape)?;
             self.unescape = unescape;
             visitor.visit_borrowed_bytes(v)

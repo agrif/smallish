@@ -127,7 +127,7 @@ impl<'de> Tokenizer<'de> {
             }
             Err(nom::Err::Failure(e)) => {
                 // failures are specific to exactly where they failed
-                let mut loc = self.location.clone();
+                let mut loc: Located<()> = self.location;
                 loc.advance(self.input, e.input);
                 Err(loc.replace(e.error))
             }
@@ -255,7 +255,7 @@ impl<'de> Tokenizer<'de> {
                     bytes::take_while1(|c: u8| c.is_ascii_alphanumeric() || c == b'_'),
                 )),
                 // should not start with a digit
-                |s: &[u8]| !s.get(0).map(u8::is_ascii_digit).unwrap_or(true),
+                |s: &[u8]| !s.first().map(u8::is_ascii_digit).unwrap_or(true),
             ),
             Self::token_boundary,
         )
@@ -332,7 +332,7 @@ impl<'de> Tokenizer<'de> {
             .parse(input)
     }
 
-    fn string_plain<'a>(input: &'a [u8]) -> IResult<&'a [u8], EscapedFragment<&'a str, char>> {
+    fn string_plain(input: &[u8]) -> IResult<&[u8], EscapedFragment<&str, char>> {
         Self::parse_utf8(combinator::verify(bytes::is_not("\"\\"), |s: &[u8]| {
             !s.is_empty()
         }))
@@ -340,7 +340,7 @@ impl<'de> Tokenizer<'de> {
         .parse(input)
     }
 
-    fn character_escape<'a>(input: &'a [u8]) -> IResult<&'a [u8], char> {
+    fn character_escape(input: &[u8]) -> IResult<&[u8], char> {
         branch::alt((
             character::char('n').map(|_| '\n'),
             character::char('r').map(|_| '\r'),
@@ -353,7 +353,7 @@ impl<'de> Tokenizer<'de> {
             sequence::preceded(
                 character::char('x'),
                 combinator::recognize((
-                    character::satisfy(|c| c >= '0' && c <= '7'),
+                    character::satisfy(|c| ('0'..='7').contains(&c)),
                     character::satisfy(|c| c.is_ascii_hexdigit()),
                 ))
                 .map_opt(|v| {
@@ -382,15 +382,13 @@ impl<'de> Tokenizer<'de> {
         .map_err(|e| e.map(|e: NomError<_>| e.replace(TokenError::UnknownEscape)))
     }
 
-    fn string_escape<'a>(input: &'a [u8]) -> IResult<&'a [u8], EscapedFragment<&'a str, char>> {
+    fn string_escape(input: &[u8]) -> IResult<&[u8], EscapedFragment<&str, char>> {
         Self::character_escape
             .map(EscapedFragment::Item)
             .parse(input)
     }
 
-    pub(crate) fn string_chunk<'a>(
-        input: &'a [u8],
-    ) -> IResult<&'a [u8], EscapedFragment<&'a str, char>> {
+    pub(crate) fn string_chunk(input: &[u8]) -> IResult<&[u8], EscapedFragment<&str, char>> {
         branch::alt((
             Self::string_plain,
             sequence::preceded(character::char('\\'), combinator::cut(Self::string_escape)),
@@ -415,13 +413,13 @@ impl<'de> Tokenizer<'de> {
         .parse(input)
     }
 
-    fn bytes_plain<'a>(input: &'a [u8]) -> IResult<&'a [u8], EscapedFragment<&'a [u8], u8>> {
+    fn bytes_plain(input: &[u8]) -> IResult<&[u8], EscapedFragment<&[u8], u8>> {
         combinator::verify(bytes::is_not("\"\\"), |s: &[u8]| !s.is_empty())
             .map(EscapedFragment::Slice)
             .parse(input)
     }
 
-    fn single_byte_escape<'a>(input: &'a [u8]) -> IResult<&'a [u8], u8> {
+    fn single_byte_escape(input: &[u8]) -> IResult<&[u8], u8> {
         branch::alt((
             character::char('n').map(|_| b'\n'),
             character::char('r').map(|_| b'\r'),
@@ -445,15 +443,13 @@ impl<'de> Tokenizer<'de> {
         .map_err(|e| e.map(|e: NomError<_>| e.replace(TokenError::UnknownEscape)))
     }
 
-    fn bytes_escape<'a>(input: &'a [u8]) -> IResult<&'a [u8], EscapedFragment<&'a [u8], u8>> {
+    fn bytes_escape(input: &[u8]) -> IResult<&[u8], EscapedFragment<&[u8], u8>> {
         Self::single_byte_escape
             .map(EscapedFragment::Item)
             .parse(input)
     }
 
-    pub(crate) fn bytes_chunk<'a>(
-        input: &'a [u8],
-    ) -> IResult<&'a [u8], EscapedFragment<&'a [u8], u8>> {
+    pub(crate) fn bytes_chunk(input: &[u8]) -> IResult<&[u8], EscapedFragment<&[u8], u8>> {
         branch::alt((
             Self::bytes_plain,
             sequence::preceded(character::char('\\'), combinator::cut(Self::bytes_escape)),
@@ -491,7 +487,7 @@ impl<'de> Tokenizer<'de> {
                         error: TokenError::InvalidUtf8,
                     })?;
                     let mut chars = s.chars();
-                    let c = chars.next().ok_or_else(|| NomError {
+                    let c = chars.next().ok_or(NomError {
                         input,
                         error: TokenError::UnknownToken,
                     });
