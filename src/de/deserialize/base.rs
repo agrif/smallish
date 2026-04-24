@@ -935,6 +935,7 @@ mod test {
         StructVariant { foo: char, bar: char },
         NewtypeVariantTuple((char, char)),
         NewtypeVariantNewtype(NewtypeStruct),
+        NewtypeVec(alloc::vec::Vec<u8>),
     }
     de_test!(enum_unit, Value, " UnitVariant \n ", Enum::UnitVariant);
     de_test!(
@@ -978,6 +979,18 @@ mod test {
         Value,
         " NewtypeVariantNewtype 42 \n ",
         Enum::NewtypeVariantNewtype(NewtypeStruct(42)),
+    );
+    de_test!(
+        enum_newtype_vec_empty,
+        Value,
+        " NewtypeVec \n ",
+        Enum::NewtypeVec(alloc::vec![]),
+    );
+    de_test!(
+        enum_newtype_vec_some,
+        Value,
+        " NewtypeVec 1 2 \n ",
+        Enum::NewtypeVec(alloc::vec![1, 2]),
     );
 
     #[derive(Debug, PartialEq, serde::Deserialize)]
