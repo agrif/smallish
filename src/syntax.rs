@@ -211,6 +211,68 @@
 //! let r: Escaped<&str> = from_str(Flavor::Value, r#""hello\n""#).unwrap();
 //! assert_eq!(*r, r#"hello\n"#)
 //! ```
+//!
+//! ### Enum Representations and Untagged Variants
+//!
+//! *smallish* is designed to work with the default, externally-tagged
+//! enum representation. However, it is possible to use the other
+//! representations by using the bare variant name as the tag.
+//!
+//! ```
+//! # use smallish::{Flavor, from_str};
+//! #[derive(Debug, PartialEq, Eq, serde::Deserialize)]
+//! #[serde(tag = "type")]
+//! enum E {
+//!     VariantName { a: u8 },
+//! }
+//!
+//! let r: E = from_str(Flavor::Value, "{type=VariantName, a=42}").unwrap();
+//! assert_eq!(r, E::VariantName { a: 42 });
+//! ```
+//!
+//! Adjacently-tagged enumumerations are fully supported. However, due
+//! to ambiguity in the grammar, **externally-tagged and untagged
+//! enums, or enums with untagged variants, need special care**. If
+//! such enums directly contain other enums, the contained enums will
+//! be parsed slightly differently. In particular,
+//!
+//! * `Variant` is always parsed as a unit variant.
+//!
+//! * `Variant k=v [...]` is always parsed as a struct variant, or a
+//! newtype variant containing a map or struct.
+//!
+//! * `Variant v [...]` is always parsed as a tuple variant, or a
+//! newtype variant containing a sequence.
+//!
+//! This means non-container newtype variants, or newtype variants
+//! containing an empty container, cannot be parsed with the usual
+//! syntax when inside an externally-tagged or untagged enum. This
+//! restriction is only for the first level of parsing inside a
+//! non-standard enum; deeper levels are not affected.
+//!
+//! As a workaround, you can instead represent the contained enums
+//! using map syntax.
+//!
+//! ```
+//! # use smallish::{Flavor, from_str};
+//! #[derive(Debug, PartialEq, Eq, serde::Deserialize)]
+//! enum SubEnum {
+//!     Sub(u8),
+//! }
+//!
+//! #[derive(Debug, PartialEq, Eq, serde::Deserialize)]
+//! #[serde(tag = "type")]
+//! enum E {
+//!     Tricky { a: SubEnum },
+//! }
+//!
+//! // this fails
+//! from_str::<E>(Flavor::Value, "{type=Tricky, a=(Sub 42)}").unwrap_err();
+//!
+//! // this works
+//! let r: E = from_str(Flavor::Value, "{type=Tricky, a={Sub=42}}").unwrap();
+//! assert_eq!(r, E::Tricky { a: SubEnum::Sub(42) });
+//! ```
 
 use crate::types::Escaped;
 
