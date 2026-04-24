@@ -144,3 +144,58 @@ where
         }
     }
 }
+
+#[cfg(test)]
+mod test {
+    extern crate alloc;
+
+    #[test]
+    fn located_base() {
+        use super::Located;
+        use crate::{from_slice_escaped, Flavor};
+        let v: Located<u8> = from_slice_escaped(Flavor::Value, b" \n   42 \n ", &mut []).unwrap();
+        assert_eq!(v.offset, 5);
+        assert_eq!(v.line, 2);
+        assert_eq!(v.column, 3);
+        assert_eq!(v.value, 42);
+        assert_eq!(v.source_line(), Some("   42 "));
+    }
+
+    #[test]
+    fn located_nested() {
+        use super::Located;
+        use crate::{from_slice_escaped, Flavor};
+        let v: alloc::vec::Vec<Located<u8>> =
+            from_slice_escaped(Flavor::Value, b" \n   [1 \n 2] \n ", &mut []).unwrap();
+        assert_eq!(v[1].offset, 10);
+        assert_eq!(v[1].line, 3);
+        assert_eq!(v[1].column, 1);
+        assert_eq!(v[1].value, 2);
+        assert_eq!(v[1].source_line(), Some(" 2] "));
+    }
+
+    #[test]
+    fn located_escaped_str() {
+        use super::Located;
+        use crate::{from_slice_escaped, types::Escaped, Flavor};
+        let v: Located<Escaped<&str>> =
+            from_slice_escaped(Flavor::Value, br#" "\n" "#, &mut []).unwrap();
+        assert_eq!(v.offset, 1);
+        assert_eq!(v.line, 1);
+        assert_eq!(v.column, 1);
+        assert_eq!(v.source_line(), Some(r#" "\n" "#));
+        assert_eq!(*v.value, "\\n");
+    }
+    #[test]
+    fn located_escaped_bytes() {
+        use super::Located;
+        use crate::{from_slice_escaped, types::Escaped, Flavor};
+        let v: Located<Escaped<&[u8]>> =
+            from_slice_escaped(Flavor::Value, br#" b"\n" "#, &mut []).unwrap();
+        assert_eq!(v.offset, 1);
+        assert_eq!(v.line, 1);
+        assert_eq!(v.column, 1);
+        assert_eq!(v.source_line(), Some(r#" b"\n" "#));
+        assert_eq!(*v.value, b"\\n");
+    }
+}

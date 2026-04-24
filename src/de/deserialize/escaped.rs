@@ -108,3 +108,99 @@ where
         self.hook_special(name, visitor, |de, visitor| de.deserialize_map(visitor))
     }
 }
+
+#[cfg(test)]
+mod test {
+    extern crate alloc;
+
+    #[test]
+    fn val_str() {
+        use crate::{from_slice_escaped, types::Escaped, Flavor};
+        let v: Escaped<&str> = from_slice_escaped(Flavor::Value, br#" "\n" "#, &mut []).unwrap();
+        assert_eq!("\\n", *v);
+    }
+    #[test]
+    fn val_string() {
+        use crate::{from_slice_escaped, types::Escaped, Flavor};
+        let v: Escaped<alloc::string::String> =
+            from_slice_escaped(Flavor::Value, br#" "\n" "#, &mut []).unwrap();
+        assert_eq!("\\n", *v);
+    }
+
+    #[test]
+    fn val_bytes() {
+        use crate::{from_slice_escaped, types::Escaped, Flavor};
+        let v: Escaped<&[u8]> = from_slice_escaped(Flavor::Value, br#" b"\n" "#, &mut []).unwrap();
+        assert_eq!(b"\\n".as_ref(), *v);
+    }
+    #[test]
+    fn val_byte_buf() {
+        use crate::{from_slice_escaped, types::Escaped, Flavor};
+        let v: Escaped<serde_bytes::ByteBuf> =
+            from_slice_escaped(Flavor::Value, br#" b"\n" "#, &mut []).unwrap();
+        assert_eq!(b"\\n".as_ref(), v.to_vec());
+    }
+
+    #[derive(Debug, PartialEq, Eq, serde::Deserialize)]
+    struct Newtype<T>(T);
+    #[test]
+    fn newtype_str() {
+        use crate::{from_slice_escaped, types::Escaped, Flavor};
+        let v: Escaped<Newtype<&str>> =
+            from_slice_escaped(Flavor::Value, br#" "\n" "#, &mut []).unwrap();
+        let v = v.0;
+        assert_eq!("\\n", v);
+    }
+    #[test]
+    fn newtype_bytes() {
+        use crate::{from_slice_escaped, types::Escaped, Flavor};
+        let v: Escaped<Newtype<&[u8]>> =
+            from_slice_escaped(Flavor::Value, br#" b"\n" "#, &mut []).unwrap();
+        let v = v.0;
+        assert_eq!(b"\\n".as_ref(), v);
+    }
+
+    #[test]
+    fn escaped_located_str() {
+        use crate::{
+            from_slice_escaped,
+            types::{Escaped, Located},
+            Flavor,
+        };
+        let v: Escaped<Located<&str>> =
+            from_slice_escaped(Flavor::Value, br#" "\n" "#, &mut []).unwrap();
+        assert_eq!("\\n", **v);
+    }
+    #[test]
+    fn escaped_located_bytes() {
+        use crate::{
+            from_slice_escaped,
+            types::{Escaped, Located},
+            Flavor,
+        };
+        let v: Escaped<Located<&[u8]>> =
+            from_slice_escaped(Flavor::Value, br#" b"\n" "#, &mut []).unwrap();
+        assert_eq!(b"\\n".as_ref(), **v);
+    }
+
+    #[derive(Debug, PartialEq, Eq, serde::Deserialize)]
+    enum Enum<T> {
+        Variant(crate::types::Escaped<T>),
+    }
+    #[test]
+    fn enum_escaped_str() {
+        use crate::{from_slice_escaped, Flavor};
+        let v: Enum<&str> =
+            from_slice_escaped(Flavor::Value, br#" Variant "\n" "#, &mut []).unwrap();
+        let Enum::Variant(s) = v;
+        assert_eq!("\\n", *s);
+    }
+    #[test]
+    fn enum_escaped_bytes() {
+        use crate::{from_slice_escaped, Flavor};
+        let v: Enum<&[u8]> =
+            from_slice_escaped(Flavor::Value, br#" Variant b"\n" "#, &mut []).unwrap();
+        let Enum::Variant(s) = v;
+        assert_eq!(b"\\n", *s);
+    }
+}
