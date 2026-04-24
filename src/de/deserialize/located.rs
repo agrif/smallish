@@ -198,4 +198,41 @@ mod test {
         assert_eq!(v.source_line(), Some(r#" b"\n" "#));
         assert_eq!(*v.value, b"\\n");
     }
+
+    #[derive(Debug, PartialEq, Eq, serde::Deserialize)]
+    struct Struct {
+        a: u8,
+        b: u8,
+    }
+
+    #[derive(Debug, PartialEq, Eq, serde::Deserialize)]
+    struct Newtype<'a>(#[serde(borrow)] super::Located<'a, Struct>);
+    #[test]
+    fn newtype_located() {
+        use crate::{from_slice_escaped, Flavor};
+        let v: Newtype =
+            from_slice_escaped(Flavor::Value, b" \n   {a=1, b=2} \n ", &mut []).unwrap();
+        assert_eq!(v.0.offset, 5);
+        assert_eq!(v.0.line, 2);
+        assert_eq!(v.0.column, 3);
+        assert_eq!(v.0.value, Struct { a: 1, b: 2 });
+        assert_eq!(v.0.source_line(), Some("   {a=1, b=2} "));
+    }
+
+    #[derive(Debug, PartialEq, Eq, serde::Deserialize)]
+    enum Enum<'a> {
+        Newtype(#[serde(borrow)] super::Located<'a, Struct>),
+    }
+    #[test]
+    fn newtype_variant_located() {
+        use crate::{from_slice_escaped, Flavor};
+        let v: Enum =
+            from_slice_escaped(Flavor::Value, b" \n   Newtype a=1 b=2 \n ", &mut []).unwrap();
+        let Enum::Newtype(v) = v;
+        assert_eq!(v.offset, 13);
+        assert_eq!(v.line, 2);
+        assert_eq!(v.column, 11);
+        assert_eq!(v.value, Struct { a: 1, b: 2 });
+        assert_eq!(v.source_line(), Some("   Newtype a=1 b=2 "));
+    }
 }
