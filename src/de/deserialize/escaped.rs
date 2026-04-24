@@ -35,7 +35,7 @@ where
     forward_to_inner_deserialize! {
         bool i8 i16 i32 i64 i128 u8 u16 u32 u64 u128 f32 f64 char
         option unit unit_struct seq tuple
-        tuple_struct map struct enum identifier ignored_any
+        tuple_struct map enum identifier ignored_any
     }
 
     fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>
@@ -94,5 +94,17 @@ where
         V: de::Visitor<'de>,
     {
         self.deserialize_bytes(visitor)
+    }
+
+    fn deserialize_struct<V>(
+        self,
+        name: &'static str,
+        _fields: &'static [&'static str],
+        visitor: V,
+    ) -> Result<V::Value, Self::Error>
+    where
+        V: de::Visitor<'de>,
+    {
+        self.hook_special(name, visitor, |de, visitor| de.deserialize_map(visitor))
     }
 }
