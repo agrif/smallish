@@ -1,19 +1,20 @@
 use smallish::de;
 
-static SOURCE: &str = r#"
-some_enum a=bbb 25 4.0e2 [[0, 1], '🤔']
-bar {baz = "hello\nworld"}
-"#;
+fn main() -> std::io::Result<()> {
+    let mut source = String::new();
+    use std::io::Read;
+    std::io::stdin().read_to_string(&mut source)?;
 
-fn main() {
-    let tokenizer = de::Tokenizer::new(SOURCE.as_bytes());
+    let tokenizer = de::Tokenizer::new(source.as_bytes());
     for tok in tokenizer {
         match tok {
             Ok(tok) => println!("{:?}", *tok),
             Err(e) => {
                 println!("error: {}", e);
-                break;
+                Err(std::io::Error::other("tokenizer error"))?;
             }
         }
     }
+
+    Ok(())
 }
