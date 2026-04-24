@@ -1,79 +1,58 @@
+use smallish::{from_str_escaped, Flavor};
+
 #[derive(Clone, Debug, serde::Deserialize)]
-#[allow(unused)]
-enum Instruction<'a> {
+enum Instr<'a> {
+    Nop,
     Go {
         dir: Option<Direction>,
         #[serde(default)]
-        opts: DirOptions,
+        label: &'a str,
     },
     Wait(u32),
     Draw(bool),
-    Vec(u8, u8, u8),
-    #[serde(borrow)]
-    SetOptions(smallish::types::Located<'a, Options<'a>>),
-    NewtypeTuple(((u8, u8), smallish::types::Located<'a, char>)),
-    NewtypeOpt(Option<(u8, u8, u8)>),
-    List(Vec<Direction>),
-    Nop,
+    Data(Vec<u32>),
 }
 
 #[derive(Clone, Debug, serde::Deserialize)]
-#[allow(unused)]
-struct Options<'a> {
-    #[serde(default)]
-    foo: DirSubOptions,
-    bar: &'a str,
-    #[serde(default)]
-    baz: smallish::types::Escaped<&'a [u8]>,
-}
-
-#[derive(Clone, Debug, Default, serde::Deserialize)]
-#[allow(unused)]
-struct DirOptions {
-    sub: DirSubOptions,
-}
-
-#[derive(Clone, Debug, Default, serde::Deserialize)]
-#[allow(unused)]
-struct DirSubOptions {
-    flag: bool,
-}
-
-#[derive(Clone, Debug, serde::Deserialize)]
-#[allow(unused)]
 enum Direction {
     North,
     South,
     East,
     West,
-    Turnwise(u8),
 }
 
 static SOURCE: &str = r#"
+# wait before we begin
 Nop
 Wait 1000
+
+# turn on drawing, then head north
 Draw true
-Vec 0 1 2
 Go dir=North
-Go dir=(Turnwise 2)
-Go dir=none opts={sub={flag=true}}
-SetOptions foo={flag=false} bar="bar" madeup={this=2}
-SetOptions bar="hello\nworld" baz=b"\n\n"
-NewtypeTuple [0, 1] '\u{1f914}'
-NewtypeTuple [0, 1] '🤔'
-List North South (Turnwise 2)
-NewtypeOpt none
-NewtypeOpt [0, 1, 2]
-List North South"#;
+Go dir=none label="going nowhere"
+
+# some arbitrary data
+Data 0x1234 0x5678
+"#;
 
 fn main() {
     let mut unescape_buffer = [0; 128];
-    match smallish::from_str_escaped::<Vec<Instruction>>(
-        smallish::Flavor::List,
-        SOURCE,
-        &mut unescape_buffer,
-    ) {
-        Ok(instructions) => println!("{:#?}", instructions),
-        Err(e) => println!("error: {}", e),
+    let instructions: Result<Vec<Instr>, _> =
+        from_str_escaped(Flavor::List, SOURCE, &mut unescape_buffer);
+
+    let instructions = instructions.unwrap_or_else(|e| {
+        println!("error: {}", e);
+        std::process::exit(1);
+    });
+
+    for instr in instructions {
+        match instr {
+            Instr::Nop => println!("doing nothing"),
+            Instr::Go { dir, label } => println!("going {:?} with label {:?}", dir, label),
+            Instr::Wait(time) => println!("waiting {}", time),
+            Instr::Draw(true) => println!("draw on"),
+            Instr::Draw(false) => println!("draw off"),
+            Instr::Data(d) => println!("got data: {:?}", d),
+        }
     }
 }
