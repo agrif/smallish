@@ -1129,31 +1129,31 @@ mod test {
     de_test!(
         adjacently_tagged_struct,
         Value,
-        " {t=StructVariant, c={c=1, d=2}} \n ",
+        " {c={c=1, d=2}, t=StructVariant} \n ",
         AdjacentEnum::StructVariant { c: 1, d: 2 },
     );
     de_test!(
         adjacently_tagged_tuple,
         Value,
-        " {t=TupleVariant, c=[1, 2]} \n ",
+        " {c=[1, 2], t=TupleVariant} \n ",
         AdjacentEnum::TupleVariant(1, 2),
     );
     de_test!(
         adjacently_tagged_simple,
         Value,
-        " {t=NewtypeSimple, c=42} \n ",
+        " {c=42, t=NewtypeSimple} \n ",
         AdjacentEnum::NewtypeSimple(42),
     );
     de_test!(
         adjacently_tagged_newtype,
         Value,
-        " {t=NewtypeVariant, c={a=1, b=2}} \n ",
+        " {c={a=1, b=2}, t=NewtypeVariant} \n ",
         AdjacentEnum::NewtypeVariant(Struct { a: 1, b: 2 }),
     );
     de_test!(
         adjacently_tagged_nested_enum_unit,
         Value,
-        " {t=EnumInEnum, c={foo=UnitVariant}} \n ",
+        " {c={foo=UnitVariant}, t=EnumInEnum} \n ",
         AdjacentEnum::EnumInEnum {
             foo: Enum::UnitVariant,
         },
@@ -1161,7 +1161,7 @@ mod test {
     de_test!(
         adjacently_tagged_nested_enum_tuple,
         Value,
-        " {t=EnumInEnum, c={foo=(TupleVariant 'a' 'b')}} \n ",
+        " {c={foo=(TupleVariant 'a' 'b')}, t=EnumInEnum} \n ",
         AdjacentEnum::EnumInEnum {
             foo: Enum::TupleVariant('a', 'b'),
         },
@@ -1169,13 +1169,22 @@ mod test {
     de_test!(
         adjacently_tagged_nested_enum_struct,
         Value,
-        " {t=EnumInEnum, c={foo=(StructVariant foo='a' bar='b')}} \n ",
+        " {c={foo=(StructVariant foo='a' bar='b')}, t=EnumInEnum} \n ",
         AdjacentEnum::EnumInEnum {
             foo: Enum::StructVariant { foo: 'a', bar: 'b' },
         },
     );
     de_test!(
-        adjacently_tagged_nested_enum_vec_empty,
+        #[should_panic(expected = "InvalidType")]
+        adjacently_tagged_nested_enum_vec_empty_fail,
+        Value,
+        " {c={foo=NewtypeVec}, t=EnumInEnum} \n ",
+        AdjacentEnum::EnumInEnum {
+            foo: Enum::NewtypeVec(alloc::vec![]),
+        },
+    );
+    de_test!(
+        adjacently_tagged_nested_enum_vec_empty_ok,
         Value,
         " {t=EnumInEnum, c={foo=NewtypeVec}} \n ",
         AdjacentEnum::EnumInEnum {
@@ -1185,7 +1194,7 @@ mod test {
     de_test!(
         adjacently_tagged_nested_enum_vec_some,
         Value,
-        " {t=EnumInEnum, c={foo=(NewtypeVec 1 2)}} \n ",
+        " {c={foo=(NewtypeVec 1 2)}, t=EnumInEnum} \n ",
         AdjacentEnum::EnumInEnum {
             foo: Enum::NewtypeVec(alloc::vec![1, 2]),
         },

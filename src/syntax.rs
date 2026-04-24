@@ -230,8 +230,7 @@
 //! assert_eq!(r, E::VariantName { a: 42 });
 //! ```
 //!
-//! Adjacently-tagged enumumerations are fully supported. However, due
-//! to ambiguity in the grammar, **externally-tagged and untagged
+//! However, due to ambiguity in the grammar, **alternately-tagged
 //! enums, or enums with untagged variants, need special care**. If
 //! such enums directly contain other enums, the contained enums will
 //! be parsed slightly differently. In particular,
@@ -249,6 +248,10 @@
 //! syntax when inside an externally-tagged or untagged enum. This
 //! restriction is only for the first level of parsing inside a
 //! non-standard enum; deeper levels are not affected.
+//!
+//! Adjacently-tagged enums do not suffer from this restriction if the
+//! tag precedes the content, but you should not rely on this
+//! behavior.
 //!
 //! As a workaround, you can instead represent the contained enums
 //! using map syntax.
