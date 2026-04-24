@@ -3,7 +3,7 @@ use serde::de;
 use crate::de::ParseError;
 use crate::fmt::FormatIter;
 use crate::syntax::{Float, Integer};
-use crate::types::{Located, UnescapeError};
+use crate::types::UnescapeError;
 
 /// Errors produced by [Deserializer](super::Deserializer).
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
@@ -64,12 +64,6 @@ pub enum Error {
     /// This field is repeated more than once.
     #[error("duplicate field: {0}")]
     DuplicateField(&'static str),
-}
-
-impl<'de> From<Located<'de, ParseError>> for Located<'de, Error> {
-    fn from(other: Located<'de, ParseError>) -> Self {
-        other.map(Into::into)
-    }
 }
 
 impl From<UnescapeError> for Error {
