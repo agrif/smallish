@@ -15,7 +15,7 @@ jobs:
           components: miri rust-src
       - uses: dtolnay/rust-toolchain@stable
         with:
-          components: llvm-tools
+          components: clippy llvm-tools
       - run: cargo +stable install cargo-llvm-cov
 
       - run: cargo +stable build --no-default-features --features "${{ matrix.features }}"
@@ -33,3 +33,6 @@ jobs:
         env:
           RUSTFLAGS: "-D warnings"
           RUSTDOCFLAGS: "-D warnings"
+      - run: cargo +stable clippy --no-default-features --features "${{ matrix.features }}"
+        env:
+          RUSTFLAGS: "-D warnings"
