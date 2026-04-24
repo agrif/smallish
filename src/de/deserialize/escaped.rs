@@ -203,4 +203,32 @@ mod test {
         let Enum::Variant(s) = v;
         assert_eq!(b"\\n", *s);
     }
+
+    #[derive(Debug, PartialEq, serde::Deserialize)]
+    #[serde(untagged)]
+    enum AnyEnum<'a> {
+        Unit(()),
+        String(&'a str),
+        Bytes(&'a [u8]),
+    }
+    #[test]
+    fn escaped_any_unit() {
+        use crate::{from_slice_escaped, types::Escaped, Flavor};
+        let v: Escaped<AnyEnum> = from_slice_escaped(Flavor::Value, br#" () "#, &mut []).unwrap();
+        assert_eq!(*v, AnyEnum::Unit(()));
+    }
+    #[test]
+    fn escaped_any_str() {
+        use crate::{from_slice_escaped, types::Escaped, Flavor};
+        let v: Escaped<AnyEnum> =
+            from_slice_escaped(Flavor::Value, b" \"a\\n\" ", &mut []).unwrap();
+        assert_eq!(*v, AnyEnum::String("a\\n"));
+    }
+    #[test]
+    fn escaped_any_bytes() {
+        use crate::{from_slice_escaped, types::Escaped, Flavor};
+        let v: Escaped<AnyEnum> =
+            from_slice_escaped(Flavor::Value, b" b\"a\xf0\" ", &mut []).unwrap();
+        assert_eq!(*v, AnyEnum::Bytes(b"a\xf0"));
+    }
 }

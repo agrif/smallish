@@ -1276,6 +1276,43 @@ mod test {
     );
 
     #[derive(Debug, PartialEq, serde::Deserialize)]
+    #[serde(untagged)]
+    enum AnyEnum<'a> {
+        Unit(()),
+        OptionBool(Option<bool>),
+        Integer(crate::syntax::Integer),
+        Float(crate::syntax::Float),
+        Character(char),
+        String(&'a str),
+        Bytes(&'a [u8]),
+    }
+    de_test!(any_unit, Value, " () \n ", AnyEnum::Unit(()));
+    de_test!(any_none, Value, " none \n ", AnyEnum::OptionBool(None));
+    de_test!(
+        any_opt_true,
+        Value,
+        " true \n ",
+        AnyEnum::OptionBool(Some(true)),
+    );
+    de_test!(any_integer, Value, " 42 \n ", AnyEnum::Integer(42));
+    de_test!(any_float, Value, " 42.1 \n ", AnyEnum::Float(42.1));
+    de_test!(any_char, Value, " 'a' \n ", AnyEnum::Character('a'));
+    de_test!(any_str, Value, " \"ab\" \n ", AnyEnum::String("ab"));
+    de_test!(
+        any_bytes,
+        Value,
+        " b\"a\\xf0\" \n ",
+        AnyEnum::Bytes(b"a\xf0"),
+    );
+    de_test!(
+        vec_of_any,
+        Value,
+        " [42] \n ",
+        alloc::vec![AnyEnum::Integer(42)],
+        alloc::vec::Vec<AnyEnum>,
+    );
+
+    #[derive(Debug, PartialEq, serde::Deserialize)]
     struct PartialStruct {
         a: u8,
         b: serde::de::IgnoredAny,
