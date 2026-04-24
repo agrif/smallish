@@ -9,16 +9,16 @@
 //! This informs the most common syntax:
 //!
 //! * **Lists** are values enclosed in square brackets `[]`, separated
-//! by either a comma or newlines.
+//!   by either a comma or newlines.
 //!
 //!   `[0, 1, 2]`
 //!
-//!    When using list-flavored *smallish*, the brackets around the
-//!    root list are omitted.
+//!   When using list-flavored *smallish*, the brackets around the
+//!   root list are omitted.
 //!
 //! * **Enumerations** are the variant name followed by arguments,
-//! separated by spaces. Tuple variants use the values directly, while
-//! struct variants use key-value pairs.
+//!   separated by spaces. Tuple variants use the values directly, while
+//!   struct variants use key-value pairs.
 //!
 //!   `VariantName key=42`
 //!
@@ -54,13 +54,13 @@
 //! supports other types as well:
 //!
 //! * **Maps and Structs** are enclosed in curly brackets `{}`
-//! containing key-value pairs, separated by either a comma or
-//! newlines.
+//!   containing key-value pairs, separated by either a comma or
+//!   newlines.
 //!
-//!    `{foo = 5, bar = 10}`
+//!   `{foo = 5, bar = 10}`
 //!
-//!    When using map-flavored *smallish*, the brackets around the
-//!    root map are omitted.
+//!   When using map-flavored *smallish*, the brackets around the
+//!   root map are omitted.
 //!
 //! * **Unit Structs** are written as `()`.
 //!
@@ -69,31 +69,31 @@
 //! * **Booleans** are written as `true` and `false`.
 //!
 //! * **Integers** are written as strings of digits in decimal, or
-//! prefixed by `0x` for hexidecimal, `0o` for octal, and `0b` for
-//! binary. They may start with `+` or `-`.
+//!   prefixed by `0x` for hexidecimal, `0o` for octal, and `0b` for
+//!   binary. They may start with `+` or `-`.
 //!
-//!    `-42`
+//!   `-42`
 //!
 //! * **Floats** are written as strings of digits in decimal, with a
-//! decimal point `.` and optionally either a `+` or `-` in front and
-//! an exponent `e` at the end.
+//!   decimal point `.` and optionally either a `+` or `-` in front and
+//!   an exponent `e` at the end.
 //!
-//!    `6.28e-2`
+//!   `6.28e-2`
 //!
 //! * **Characters** are written enclosed in single-quotes `'`, and
-//! support the same escapes as Rust.
+//!   support the same escapes as Rust.
 //!
-//!    `'A'`
+//!   `'A'`
 //!
-//!    `'\u{2603}'`
+//!   `'\u{2603}'`
 //!
 //! * **Strings and Bytes** are written enclosed in double-quotes `"`,
-//! and bytes are prefixed with `b`. These also support the same
-//! escapes as Rust.
+//!   and bytes are prefixed with `b`. These also support the same
+//!   escapes as Rust.
 //!
-//!    `"Hello,\nworld!"`
+//!   `"Hello,\nworld!"`
 //!
-//!    `b"\x00\x01"`
+//!   `b"\x00\x01"`
 //!
 //! ## Flavors
 //!
@@ -238,10 +238,10 @@
 //! * `Variant` is always parsed as a unit variant.
 //!
 //! * `Variant k=v [...]` is always parsed as a struct variant, or a
-//! newtype variant containing a map or struct.
+//!   newtype variant containing a map or struct.
 //!
 //! * `Variant v [...]` is always parsed as a tuple variant, or a
-//! newtype variant containing a sequence.
+//!   newtype variant containing a sequence.
 //!
 //! This means non-container newtype variants, or newtype variants
 //! containing an empty container, cannot be parsed with the usual
