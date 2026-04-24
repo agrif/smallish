@@ -210,7 +210,26 @@ where
         match self.peek()? {
             Event::ListOpen => self.deserialize_seq(visitor),
             Event::MapOpen => self.deserialize_map(visitor),
-            Event::EnumOpen(_) => self.deserialize_enum("", &[], visitor),
+            // things that use deserialize_any (like enum representations)
+            // are not usually equipped to handle enum events, so instead
+            // turn them into externally-tagged maps or strings
+            Event::EnumOpen(name) => {
+                self.consume();
+                if self
+                    .peek_with(as_variant!(Event::EnumClose => ()))?
+                    .is_some()
+                {
+                    // Unit enum, be a string.
+                    // This could also be an empty seq/map, but unit enums
+                    // seem to be more likely. Sorry!
+                    self.consume();
+                    visitor.visit_borrowed_str(name)
+                } else {
+                    let v = visitor.visit_map(ExternalEnumAccess::new(self, name));
+                    self.next_with(as_variant!(Event::EnumClose => ()))?;
+                    v
+                }
+            }
             Event::Value(v) => match v {
                 Value::Unit => self.deserialize_unit(visitor),
                 Value::None => self.deserialize_option(visitor),
@@ -543,10 +562,11 @@ where
     where
         V: de::Visitor<'de>,
     {
-        // only internally tagged enums seem to use this, and
-        // those can't read enums themselves (only strings), so
-        // the most consistent choice here is "only ever strings"
-        self.deserialize_str(visitor)
+        // enum representations use this for the variant, so look for
+        // bare enums.
+        let name = self.next_with(as_variant!(Event::EnumOpen(n) => n))?;
+        self.next_with(as_variant!(Event::EnumClose => ()))?;
+        visitor.visit_borrowed_str(name)
     }
 
     fn deserialize_ignored_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>
@@ -700,6 +720,49 @@ where
         V: de::DeserializeSeed<'de>,
     {
         seed.deserialize(&mut *self.de)
+    }
+}
+
+#[derive(Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+struct ExternalEnumAccess<'a, 'de, De> {
+    de: &'a mut De,
+    name: Option<&'de str>,
+}
+
+impl<'a, 'de, De> ExternalEnumAccess<'a, 'de, De> {
+    fn new(de: &'a mut De, name: &'de str) -> Self {
+        Self {
+            de,
+            name: Some(name),
+        }
+    }
+}
+
+impl<'a, 'de, De> de::MapAccess<'de> for ExternalEnumAccess<'a, 'de, De>
+where
+    for<'b> &'b mut De: SmallishDe<'de>,
+{
+    type Error = Error;
+
+    fn next_key_seed<K>(&mut self, seed: K) -> Result<Option<K::Value>, Self::Error>
+    where
+        K: de::DeserializeSeed<'de>,
+    {
+        if let Some(name) = self.name.take() {
+            let de = de::value::BorrowedStrDeserializer::<'de, Error>::new(name);
+            seed.deserialize(de).map(Some)
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn next_value_seed<V>(&mut self, seed: V) -> Result<V::Value, Self::Error>
+    where
+        V: de::DeserializeSeed<'de>,
+    {
+        let mut de = inline::InlineHandler::new(&mut *self.de);
+        seed.deserialize(&mut de)
     }
 }
 

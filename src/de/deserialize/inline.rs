@@ -41,9 +41,13 @@ where
     where
         V: de::Visitor<'de>,
     {
-        // best effort: keys mean maps, everything else is a list
+        // Best effort: keys mean maps, EnumClose means empty map,
+        // everything else is seq.
+        // This breaks empty seq variants. There is no way to get them
+        // all to work, and empty seq variants seem more unlikely
+        // than unit variants.
         match self.de.peek()? {
-            Event::Key(_) => self.deserialize_map(visitor),
+            Event::Key(_) | Event::EnumClose => self.deserialize_map(visitor),
             _ => self.deserialize_seq(visitor),
         }
     }
