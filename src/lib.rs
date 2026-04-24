@@ -162,3 +162,40 @@ where
 {
     from_slice_escaped(flavor, input.as_bytes(), unescape)
 }
+
+#[cfg(test)]
+mod test {
+    // smoke tests
+
+    #[test]
+    fn from_str() {
+        use super::{from_str, Flavor};
+        assert!(from_str::<()>(Flavor::Value, "()").is_ok())
+    }
+
+    #[test]
+    fn from_slice() {
+        use super::{from_slice, Flavor};
+        assert!(from_slice::<()>(Flavor::Value, b"()").is_ok())
+    }
+
+    #[test]
+    fn from_str_escaped() {
+        use super::{from_str_escaped, Flavor};
+        let mut buf = [0; 128];
+        assert_eq!(
+            Ok("hi\n"),
+            from_str_escaped(Flavor::Value, r#""hi\n""#, &mut buf)
+        )
+    }
+
+    #[test]
+    fn from_slice_escaped() {
+        use super::{from_slice_escaped, Flavor};
+        let mut buf = [0; 128];
+        assert_eq!(
+            Ok("hi\n"),
+            from_slice_escaped(Flavor::Value, br#""hi\n""#, &mut buf)
+        )
+    }
+}
