@@ -910,6 +910,22 @@ mod test {
     );
 
     #[derive(Debug, PartialEq, Eq, serde::Deserialize)]
+    struct FlattenStruct {
+        c: u8,
+        #[serde(flatten)]
+        sub: Struct,
+    }
+    de_test!(
+        flatten_struct,
+        Map,
+        " a = 1 \n b=2, c=3 \n ",
+        FlattenStruct {
+            c: 3,
+            sub: Struct { a: 1, b: 2 }
+        },
+    );
+
+    #[derive(Debug, PartialEq, Eq, serde::Deserialize)]
     enum Enum {
         UnitVariant,
         NewtypeVariantSimple(u8),
