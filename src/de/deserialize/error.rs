@@ -126,3 +126,57 @@ impl de::Error for Error {
         Self::DuplicateField(field)
     }
 }
+
+#[cfg(test)]
+mod test {
+    #[test]
+    fn invalid_value() {
+        use crate::{de::Error, from_slice_escaped, Flavor};
+        use core::num::NonZero;
+        let r = from_slice_escaped::<NonZero<u8>>(Flavor::Value, b" 0 ", &mut []).unwrap_err();
+        assert_eq!(Error::InvalidValue, *r)
+    }
+
+    #[test]
+    fn invalid_length() {
+        use crate::{de::Error, from_slice_escaped, Flavor};
+        let r = from_slice_escaped::<(u8, u8)>(Flavor::Value, b" [0] ", &mut []).unwrap_err();
+        assert_eq!(Error::InvalidLength(1), *r)
+    }
+
+    #[derive(Debug, PartialEq, Eq, serde::Deserialize)]
+    enum Enum {
+        Variant,
+    }
+    #[test]
+    fn unknown_variant() {
+        use crate::{de::Error, from_slice_escaped, Flavor};
+        let r = from_slice_escaped::<Enum>(Flavor::Value, b" No ", &mut []).unwrap_err();
+        assert_eq!(Error::UnknownVariant(&["Variant"]), *r)
+    }
+
+    #[derive(Debug, PartialEq, Eq, serde::Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct Struct {
+        a: u8,
+        b: u8,
+    }
+    #[test]
+    fn unknown_field() {
+        use crate::{de::Error, from_slice_escaped, Flavor};
+        let r = from_slice_escaped::<Struct>(Flavor::Value, b" {foo=2} ", &mut []).unwrap_err();
+        assert_eq!(Error::UnknownField(&["a", "b"]), *r)
+    }
+    #[test]
+    fn missing_field() {
+        use crate::{de::Error, from_slice_escaped, Flavor};
+        let r = from_slice_escaped::<Struct>(Flavor::Value, b" {a=2} ", &mut []).unwrap_err();
+        assert_eq!(Error::MissingField("b"), *r)
+    }
+    #[test]
+    fn duplicate_field() {
+        use crate::{de::Error, from_slice_escaped, Flavor};
+        let r = from_slice_escaped::<Struct>(Flavor::Value, b" {a=2, a=3} ", &mut []).unwrap_err();
+        assert_eq!(Error::DuplicateField("a"), *r)
+    }
+}
