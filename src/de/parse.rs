@@ -458,7 +458,7 @@ where
         ev
     }
 
-    pub fn next_inner(&mut self) -> LocResult<'de, Event<'de>, ParseError> {
+    fn next_inner(&mut self) -> LocResult<'de, Event<'de>, ParseError> {
         if !self.initial_state_sent {
             self.initial_state_sent = true;
             match self.initial_state {
