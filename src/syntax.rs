@@ -280,7 +280,7 @@
 use crate::types::Escaped;
 
 /// The internal integer type. Integers outside this range will fail to parse.
-pub type Integer = i64;
+pub type Int = i64;
 
 /// The internal float type. Floats outside this range will fail to parse.
 pub type Float = f32;
@@ -346,13 +346,13 @@ pub enum Value<'de> {
     /// `true` or `false`
     Bool(bool),
     /// integers
-    Integer(Integer),
+    Int(Int),
     /// floats
     Float(Float),
     /// characters
-    Character(char),
+    Char(char),
     /// strings, stored *with* escapes
-    String(Escaped<&'de str>),
+    Str(Escaped<&'de str>),
     /// bytes, stored *with* escapes
     Bytes(Escaped<&'de [u8]>),
 }

@@ -43,7 +43,7 @@ where
         V: de::Visitor<'de>,
     {
         match self.de.peek()? {
-            Event::Value(Value::String(_)) => self.deserialize_str(visitor),
+            Event::Value(Value::Str(_)) => self.deserialize_str(visitor),
             Event::Value(Value::Bytes(_)) => self.deserialize_bytes(visitor),
             _ => self.de.deserialize_any(visitor),
         }
@@ -67,7 +67,7 @@ where
         V: de::Visitor<'de>,
     {
         let v = self.de.next_with(|t| {
-            as_variant!(t, Event::Value).and_then(as_variant!(Value::String(v) => v))
+            as_variant!(t, Event::Value).and_then(as_variant!(Value::Str(v) => v))
         })?;
         visitor.visit_borrowed_str(*v)
     }

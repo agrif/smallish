@@ -3,7 +3,7 @@ use nom::{
     number::complete as number, sequence, Parser,
 };
 
-use crate::syntax::{Integer, Token, Value};
+use crate::syntax::{Int, Token, Value};
 use crate::types::{Escaped, EscapedFragment, LocResult, Located};
 
 /// Errors produced by [Tokenizer].
@@ -304,7 +304,7 @@ impl<'de> Tokenizer<'de> {
         .map_res(|(s, radix)| {
             // safety: the above only matches valid ascii
             let s = unsafe { core::str::from_utf8_unchecked(s) };
-            Integer::from_str_radix(s, radix)
+            Int::from_str_radix(s, radix)
         })
         .parse(input)?;
 
@@ -312,7 +312,7 @@ impl<'de> Tokenizer<'de> {
             value = -value;
         }
 
-        Ok((input, Token::Value(Value::Integer(value))))
+        Ok((input, Token::Value(Value::Int(value))))
     }
 
     fn float<'a>(input: &'a [u8]) -> IResult<&'a [u8], Token<'a>> {
@@ -403,7 +403,7 @@ impl<'de> Tokenizer<'de> {
             character::char('"'),
         )
         .map(|s| {
-            Token::Value(Value::String(Escaped::new_unchecked(
+            Token::Value(Value::Str(Escaped::new_unchecked(
                 // safety: the string parsers already check for utf-8
                 unsafe { core::str::from_utf8_unchecked(s) },
             )))
@@ -502,7 +502,7 @@ impl<'de> Tokenizer<'de> {
             ))),
             character::char('\''),
         )
-        .map(|c| Token::Value(Value::Character(c)))
+        .map(|c| Token::Value(Value::Char(c)))
         .parse(input)
     }
 
@@ -703,30 +703,30 @@ mod test {
     token_test!(
         val_ints,
         "   \n  10 -20 +30",
-        Value(Integer(10)),
-        Value(Integer(-20)),
-        Value(Integer(30)),
+        Value(Int(10)),
+        Value(Int(-20)),
+        Value(Int(30)),
     );
     token_test!(
         val_ints_hex,
         "   \n  0x10 -0x20 +0x30",
-        Value(Integer(0x10)),
-        Value(Integer(-0x20)),
-        Value(Integer(0x30)),
+        Value(Int(0x10)),
+        Value(Int(-0x20)),
+        Value(Int(0x30)),
     );
     token_test!(
         val_ints_oct,
         "   \n  0o10 -0o20 +0o30",
-        Value(Integer(0o10)),
-        Value(Integer(-0o20)),
-        Value(Integer(0o30)),
+        Value(Int(0o10)),
+        Value(Int(-0o20)),
+        Value(Int(0o30)),
     );
     token_test!(
         val_ints_bin,
         "   \n  0b10 -0b11 +0b111",
-        Value(Integer(0b10)),
-        Value(Integer(-0b11)),
-        Value(Integer(0b111)),
+        Value(Int(0b10)),
+        Value(Int(-0b11)),
+        Value(Int(0b111)),
     );
     any_tokens_test!(
         #[should_panic(expected = "UnknownToken")]
@@ -754,20 +754,20 @@ mod test {
     token_test!(
         val_chars,
         r#"      'a' 'A' '\u{2603}' '🄯'"#,
-        Value(Character('a')),
-        Value(Character('A')),
-        Value(Character('☃')),
-        Value(Character('🄯')),
+        Value(Char('a')),
+        Value(Char('A')),
+        Value(Char('☃')),
+        Value(Char('🄯')),
     );
     token_test!(
         #[should_panic(expected = "UnknownEscape")]
         val_chars_escapes_invalid,
         // \xf0 is not valid utf-8
         r#"      'a' 'A' '\xf0' '🄯'"#,
-        Value(Character('a')),
-        Value(Character('A')),
-        Value(Character('?')),
-        Value(Character('🄯')),
+        Value(Char('a')),
+        Value(Char('A')),
+        Value(Char('?')),
+        Value(Char('🄯')),
     );
     any_tokens_test!(
         #[should_panic(expected = "InvalidCharLiteral")]
@@ -788,20 +788,20 @@ mod test {
     token_test!(
         val_string,
         r#"  "hello"    "there"    "#,
-        Value(String(Escaped::new("hello").unwrap())),
-        Value(String(Escaped::new("there").unwrap())),
+        Value(Str(Escaped::new("hello").unwrap())),
+        Value(Str(Escaped::new("there").unwrap())),
     );
     token_test!(
         val_string_escapes,
         r#"  "hel\n\r\tlo"    "the\\\0\"\'re"    "#,
-        Value(String(Escaped::new("hel\\n\\r\\tlo").unwrap())),
-        Value(String(Escaped::new("the\\\\\\0\\\"\\\'re").unwrap())),
+        Value(Str(Escaped::new("hel\\n\\r\\tlo").unwrap())),
+        Value(Str(Escaped::new("the\\\\\\0\\\"\\\'re").unwrap())),
     );
     token_test!(
         val_string_escapes_num,
         r#"  "hel\x42lo"    "the\u{1234}re"    "#,
-        Value(String(Escaped::new("hel\\x42lo").unwrap())),
-        Value(String(Escaped::new("the\\u{1234}re").unwrap())),
+        Value(Str(Escaped::new("hel\\x42lo").unwrap())),
+        Value(Str(Escaped::new("the\\u{1234}re").unwrap())),
     );
     token_test!(
         #[should_panic(expected = "UnknownEscape")]
@@ -816,8 +816,8 @@ mod test {
         r#"  "hel
 lo"    "the
 re"    "#,
-        Value(String(Escaped::new("hel\nlo").unwrap())),
-        Value(String(Escaped::new("the\nre").unwrap())),
+        Value(Str(Escaped::new("hel\nlo").unwrap())),
+        Value(Str(Escaped::new("the\nre").unwrap())),
     );
 
     token_test!(

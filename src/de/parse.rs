@@ -652,22 +652,22 @@ mod test {
     );
 
     // make sure newlines at end and beginning are ignored
-    parse_test!(newline_at_beginning, Value, " \n   0  ", Value(Integer(0)));
-    parse_test!(newline_at_end, Value, "   0  \n  ", Value(Integer(0)));
+    parse_test!(newline_at_beginning, Value, " \n   0  ", Value(Int(0)));
+    parse_test!(newline_at_end, Value, "   0  \n  ", Value(Int(0)));
 
     parse_test!(val_unit, Value, "   ()   ", Value(Unit));
     parse_test!(val_paren_unit, Value, "   ( \n ())   ", Value(Unit));
     parse_test!(val_none, Value, "   none   ", Value(None));
     parse_test!(val_true, Value, "   true   ", Value(Bool(true)));
     parse_test!(val_false, Value, "   false   ", Value(Bool(false)));
-    parse_test!(val_int, Value, "   42   ", Value(Integer(42)));
+    parse_test!(val_int, Value, "   42   ", Value(Int(42)));
     parse_test!(val_float, Value, "   42.1   ", Value(Float(42.1)));
-    parse_test!(val_char, Value, "   'A'   ", Value(Character('A')));
+    parse_test!(val_char, Value, "   'A'   ", Value(Char('A')));
     parse_test!(
         val_string,
         Value,
         "   \"hello\"   ",
-        Value(String(Escaped::new("hello").unwrap()))
+        Value(Str(Escaped::new("hello").unwrap()))
     );
     parse_test!(
         val_bytes,
@@ -693,7 +693,7 @@ mod test {
         Value,
         "  [ 0 0 ] ",
         ListOpen,
-        Value(Integer(0)),
+        Value(Int(0)),
         ListClose, // dummy
     );
     parse_test!(
@@ -701,9 +701,9 @@ mod test {
         Value,
         " [1, (2), 3] ",
         ListOpen,
-        Value(Integer(1)),
-        Value(Integer(2)),
-        Value(Integer(3)),
+        Value(Int(1)),
+        Value(Int(2)),
+        Value(Int(3)),
         ListClose,
     );
     parse_test!(
@@ -711,7 +711,7 @@ mod test {
         Value,
         " [1 , ] ",
         ListOpen,
-        Value(Integer(1)),
+        Value(Int(1)),
         ListClose,
     );
     parse_test!(
@@ -719,9 +719,9 @@ mod test {
         Value,
         " [1, \n 2 \n 3] ",
         ListOpen,
-        Value(Integer(1)),
-        Value(Integer(2)),
-        Value(Integer(3)),
+        Value(Int(1)),
+        Value(Int(2)),
+        Value(Int(3)),
         ListClose,
     );
     parse_test!(
@@ -742,9 +742,9 @@ mod test {
         List,
         " 1, 2, 3 ",
         ListOpen,
-        Value(Integer(1)),
-        Value(Integer(2)),
-        Value(Integer(3)),
+        Value(Int(1)),
+        Value(Int(2)),
+        Value(Int(3)),
         ListClose,
     );
     parse_test!(
@@ -752,7 +752,7 @@ mod test {
         List,
         " 1 ,  ",
         ListOpen,
-        Value(Integer(1)),
+        Value(Int(1)),
         ListClose,
     );
     parse_test!(
@@ -760,9 +760,9 @@ mod test {
         List,
         " 1, \n 2 \n 3 ",
         ListOpen,
-        Value(Integer(1)),
-        Value(Integer(2)),
-        Value(Integer(3)),
+        Value(Int(1)),
+        Value(Int(2)),
+        Value(Int(3)),
         ListClose,
     );
     parse_test!(
@@ -797,7 +797,7 @@ mod test {
         "  { a=0 b=1 } ",
         MapOpen,
         Key("a"),
-        Value(Integer(0)),
+        Value(Int(0)),
         MapClose, // dummy
     );
     parse_test!(
@@ -806,9 +806,9 @@ mod test {
         " {a=1, b =  2} ",
         MapOpen,
         Key("a"),
-        Value(Integer(1)),
+        Value(Int(1)),
         Key("b"),
-        Value(Integer(2)),
+        Value(Int(2)),
         MapClose,
     );
     parse_test!(
@@ -817,7 +817,7 @@ mod test {
         " {a=1 , } ",
         MapOpen,
         Key("a"),
-        Value(Integer(1)),
+        Value(Int(1)),
         MapClose,
     );
     parse_test!(
@@ -844,11 +844,11 @@ mod test {
         " {a = 1, \n b = 2\n c = 3 } ",
         MapOpen,
         Key("a"),
-        Value(Integer(1)),
+        Value(Int(1)),
         Key("b"),
-        Value(Integer(2)),
+        Value(Int(2)),
         Key("c"),
-        Value(Integer(3)),
+        Value(Int(3)),
         MapClose,
     );
     parse_test!(
@@ -884,7 +884,7 @@ mod test {
         MapOpen,
         Key("a"),
         EnumOpen("enum"),
-        Value(Integer(0)),
+        Value(Int(0)),
         EnumClose,
         MapClose,
     );
@@ -895,7 +895,7 @@ mod test {
         MapOpen,
         Key("a"),
         EnumOpen("enum"),
-        Value(Integer(0)),
+        Value(Int(0)),
         EnumClose,
         MapClose,
     );
@@ -905,9 +905,9 @@ mod test {
         " a=1, b =  2 ",
         MapOpen,
         Key("a"),
-        Value(Integer(1)),
+        Value(Int(1)),
         Key("b"),
-        Value(Integer(2)),
+        Value(Int(2)),
         MapClose,
     );
     parse_test!(
@@ -916,7 +916,7 @@ mod test {
         " a=1 ,  ",
         MapOpen,
         Key("a"),
-        Value(Integer(1)),
+        Value(Int(1)),
         MapClose,
     );
     parse_test!(
@@ -925,11 +925,11 @@ mod test {
         " a = 1, \n b = 2 \n c = 3  ",
         MapOpen,
         Key("a"),
-        Value(Integer(1)),
+        Value(Int(1)),
         Key("b"),
-        Value(Integer(2)),
+        Value(Int(2)),
         Key("c"),
-        Value(Integer(3)),
+        Value(Int(3)),
         MapClose,
     );
     parse_test!(
@@ -973,8 +973,8 @@ mod test {
         Value,
         " var 1 2  ",
         EnumOpen("var"),
-        Value(Integer(1)),
-        Value(Integer(2)),
+        Value(Int(1)),
+        Value(Int(2)),
         EnumClose,
     );
     parse_test!(
@@ -983,9 +983,9 @@ mod test {
         " var a=1 b=2  ",
         EnumOpen("var"),
         Key("a"),
-        Value(Integer(1)),
+        Value(Int(1)),
         Key("b"),
-        Value(Integer(2)),
+        Value(Int(2)),
         EnumClose,
     );
     parse_test!(
@@ -993,9 +993,9 @@ mod test {
         Value,
         " var 1 b=2  ",
         EnumOpen("var"),
-        Value(Integer(1)),
+        Value(Int(1)),
         Key("b"),
-        Value(Integer(2)),
+        Value(Int(2)),
         EnumClose,
     );
     parse_test!(
@@ -1023,7 +1023,7 @@ mod test {
         Value,
         " var 1 \n ",
         EnumOpen("var"),
-        Value(Integer(1)),
+        Value(Int(1)),
         EnumClose,
     );
     parse_test!(
@@ -1057,7 +1057,7 @@ mod test {
         Key("a"),
         EnumOpen("enum"),
         EnumClose,
-        Value(Integer(0)),
+        Value(Int(0)),
         EnumClose,
     );
     parse_test!(
@@ -1067,7 +1067,7 @@ mod test {
         EnumOpen("var"),
         Key("a"),
         EnumOpen("enum"),
-        Value(Integer(0)),
+        Value(Int(0)),
         EnumClose,
         EnumClose,
     );
@@ -1087,7 +1087,7 @@ mod test {
         EnumOpen("var"),
         EnumOpen("enum"),
         EnumClose,
-        Value(Integer(0)),
+        Value(Int(0)),
         EnumClose,
     );
     parse_test!(
@@ -1096,7 +1096,7 @@ mod test {
         " var (enum 0) ",
         EnumOpen("var"),
         EnumOpen("enum"),
-        Value(Integer(0)),
+        Value(Int(0)),
         EnumClose,
         EnumClose,
     );

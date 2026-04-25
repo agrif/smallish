@@ -234,10 +234,10 @@ where
                 Value::Unit => self.deserialize_unit(visitor),
                 Value::None => self.deserialize_option(visitor),
                 Value::Bool(_) => self.deserialize_bool(visitor),
-                Value::Integer(_) => self.deserialize_i64(visitor),
+                Value::Int(_) => self.deserialize_i64(visitor),
                 Value::Float(_) => self.deserialize_f32(visitor),
-                Value::Character(_) => self.deserialize_char(visitor),
-                Value::String(_) => self.deserialize_str(visitor),
+                Value::Char(_) => self.deserialize_char(visitor),
+                Value::Str(_) => self.deserialize_str(visitor),
                 Value::Bytes(_) => self.deserialize_bytes(visitor),
             },
             Event::ListClose | Event::MapClose | Event::EnumClose | Event::Key(_) => {
@@ -261,9 +261,9 @@ where
         V: de::Visitor<'de>,
     {
         let v = self.next_with(|t| {
-            as_variant!(t, Event::Value).and_then(as_variant!(Value::Integer(v) => v))
+            as_variant!(t, Event::Value).and_then(as_variant!(Value::Int(v) => v))
         })?;
-        let v = v.try_into().map_err(|_| Error::IntegerRange(v))?;
+        let v = v.try_into().map_err(|_| Error::IntRange(v))?;
         visitor.visit_i8(v)
     }
 
@@ -272,9 +272,9 @@ where
         V: de::Visitor<'de>,
     {
         let v = self.next_with(|t| {
-            as_variant!(t, Event::Value).and_then(as_variant!(Value::Integer(v) => v))
+            as_variant!(t, Event::Value).and_then(as_variant!(Value::Int(v) => v))
         })?;
-        let v = v.try_into().map_err(|_| Error::IntegerRange(v))?;
+        let v = v.try_into().map_err(|_| Error::IntRange(v))?;
         visitor.visit_u8(v)
     }
 
@@ -283,9 +283,9 @@ where
         V: de::Visitor<'de>,
     {
         let v = self.next_with(|t| {
-            as_variant!(t, Event::Value).and_then(as_variant!(Value::Integer(v) => v))
+            as_variant!(t, Event::Value).and_then(as_variant!(Value::Int(v) => v))
         })?;
-        let v = v.try_into().map_err(|_| Error::IntegerRange(v))?;
+        let v = v.try_into().map_err(|_| Error::IntRange(v))?;
         visitor.visit_i16(v)
     }
 
@@ -294,9 +294,9 @@ where
         V: de::Visitor<'de>,
     {
         let v = self.next_with(|t| {
-            as_variant!(t, Event::Value).and_then(as_variant!(Value::Integer(v) => v))
+            as_variant!(t, Event::Value).and_then(as_variant!(Value::Int(v) => v))
         })?;
-        let v = v.try_into().map_err(|_| Error::IntegerRange(v))?;
+        let v = v.try_into().map_err(|_| Error::IntRange(v))?;
         visitor.visit_u16(v)
     }
 
@@ -305,9 +305,9 @@ where
         V: de::Visitor<'de>,
     {
         let v = self.next_with(|t| {
-            as_variant!(t, Event::Value).and_then(as_variant!(Value::Integer(v) => v))
+            as_variant!(t, Event::Value).and_then(as_variant!(Value::Int(v) => v))
         })?;
-        let v = v.try_into().map_err(|_| Error::IntegerRange(v))?;
+        let v = v.try_into().map_err(|_| Error::IntRange(v))?;
         visitor.visit_i32(v)
     }
 
@@ -316,9 +316,9 @@ where
         V: de::Visitor<'de>,
     {
         let v = self.next_with(|t| {
-            as_variant!(t, Event::Value).and_then(as_variant!(Value::Integer(v) => v))
+            as_variant!(t, Event::Value).and_then(as_variant!(Value::Int(v) => v))
         })?;
-        let v = v.try_into().map_err(|_| Error::IntegerRange(v))?;
+        let v = v.try_into().map_err(|_| Error::IntRange(v))?;
         visitor.visit_u32(v)
     }
 
@@ -327,7 +327,7 @@ where
         V: de::Visitor<'de>,
     {
         let v = self.next_with(|t| {
-            as_variant!(t, Event::Value).and_then(as_variant!(Value::Integer(v) => v))
+            as_variant!(t, Event::Value).and_then(as_variant!(Value::Int(v) => v))
         })?;
         visitor.visit_i64(v)
     }
@@ -337,9 +337,9 @@ where
         V: de::Visitor<'de>,
     {
         let v = self.next_with(|t| {
-            as_variant!(t, Event::Value).and_then(as_variant!(Value::Integer(v) => v))
+            as_variant!(t, Event::Value).and_then(as_variant!(Value::Int(v) => v))
         })?;
-        let v = v.try_into().map_err(|_| Error::IntegerRange(v))?;
+        let v = v.try_into().map_err(|_| Error::IntRange(v))?;
         visitor.visit_u64(v)
     }
 
@@ -348,7 +348,7 @@ where
         V: de::Visitor<'de>,
     {
         let v = self.next_with(|t| {
-            as_variant!(t, Event::Value).and_then(as_variant!(Value::Integer(v) => v))
+            as_variant!(t, Event::Value).and_then(as_variant!(Value::Int(v) => v))
         })?;
         let v = v.into();
         visitor.visit_i128(v)
@@ -359,9 +359,9 @@ where
         V: de::Visitor<'de>,
     {
         let v = self.next_with(|t| {
-            as_variant!(t, Event::Value).and_then(as_variant!(Value::Integer(v) => v))
+            as_variant!(t, Event::Value).and_then(as_variant!(Value::Int(v) => v))
         })?;
-        let v = v.try_into().map_err(|_| Error::IntegerRange(v))?;
+        let v = v.try_into().map_err(|_| Error::IntRange(v))?;
         visitor.visit_u128(v)
     }
 
@@ -391,7 +391,7 @@ where
         V: de::Visitor<'de>,
     {
         let v = self.next_with(|t| {
-            as_variant!(t, Event::Value).and_then(as_variant!(Value::Character(v) => v))
+            as_variant!(t, Event::Value).and_then(as_variant!(Value::Char(v) => v))
         })?;
         visitor.visit_char(v)
     }
@@ -401,7 +401,7 @@ where
         V: de::Visitor<'de>,
     {
         let v = self.next_with(|t| {
-            as_variant!(t, Event::Value).and_then(as_variant!(Value::String(v) => v))
+            as_variant!(t, Event::Value).and_then(as_variant!(Value::Str(v) => v))
         })?;
 
         if !v.has_escapes() {
@@ -809,15 +809,7 @@ mod test {
 
     macro_rules! int_test {
         ($uprim:ident, $iprim:ident, $s:literal, $n: expr, $ibig:literal) => {
-            int_test!(
-                $uprim,
-                $iprim,
-                $s,
-                $n,
-                $ibig,
-                "IntegerRange",
-                "IntegerRange"
-            );
+            int_test!($uprim, $iprim, $s, $n, $ibig, "IntRange", "IntRange");
         };
         ($uprim:ident, $iprim:ident, $s:literal, $n: expr, $ibig:literal, $uerror:literal, $ierror: literal) => {
             paste::paste! {
@@ -852,7 +844,7 @@ mod test {
         "42",
         42,
         "0x8000000000000000",
-        "IntegerRange",
+        "IntRange",
         "UnknownToken"
     );
     int_test!(
@@ -861,7 +853,7 @@ mod test {
         "42",
         42,
         "0x80000000000000000000000000000000",
-        "IntegerRange",
+        "IntRange",
         "UnknownToken"
     );
 
@@ -1280,7 +1272,7 @@ mod test {
     enum AnyEnum<'a> {
         Unit(()),
         OptionBool(Option<bool>),
-        Integer(crate::syntax::Integer),
+        Integer(crate::syntax::Int),
         Float(crate::syntax::Float),
         Character(char),
         String(&'a str),
