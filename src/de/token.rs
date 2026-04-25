@@ -62,21 +62,6 @@ impl<I> error::FromExternalError<I, NomError<I>> for NomError<I> {
     }
 }
 
-impl<I> error::FromExternalError<I, core::num::ParseIntError> for NomError<I> {
-    fn from_external_error(
-        input: I,
-        _kind: error::ErrorKind,
-        _err: core::num::ParseIntError,
-    ) -> Self {
-        // we accept valid integer literals in the tokenizer, so
-        // this can only happen if the result is too big
-        NomError {
-            input,
-            error: TokenError::IntRange,
-        }
-    }
-}
-
 pub(crate) type IResult<I, O> = nom::IResult<I, O, NomError<I>>;
 
 /// Turn source into a stream of [Tokens](Token).
@@ -281,48 +266,79 @@ impl<'de> Tokenizer<'de> {
             .parse(input)
     }
 
-    fn integer<'a>(input: &'a [u8]) -> IResult<&'a [u8], Token<'a>> {
-        let (number_start, sign) = combinator::opt(character::one_of("-+")).parse(input)?;
+    // Int::from_ascii_radix is insufficient for handling Int::MIN
+    // however, by all means read that source for why this is this way
+    fn from_ascii_radix(is_positive: bool, src: &[u8], radix: u32) -> Result<Int, TokenError> {
+        assert!((2..=16).contains(&radix), "invalid radix");
+        assert!(!src.is_empty(), "empty integer");
 
-        let (input, (s, radix)) = branch::alt((
-            sequence::terminated(
-                sequence::preceded(
-                    (character::char('0'), character::one_of("xX")),
-                    character::hex_digit1.map(|s| (s, 16)),
-                ),
-                Self::token_boundary,
-            ),
-            sequence::terminated(
-                sequence::preceded(
-                    (character::char('0'), character::one_of("oO")),
-                    character::oct_digit1.map(|s| (s, 8)),
-                ),
-                Self::token_boundary,
-            ),
-            sequence::terminated(
-                sequence::preceded(
-                    (character::char('0'), character::one_of("bB")),
-                    character::bin_digit1.map(|s| (s, 2)),
-                ),
-                Self::token_boundary,
-            ),
-            sequence::terminated(character::digit1.map(|s| (s, 10)), Self::token_boundary),
-        ))
-        .parse(number_start)?;
+        let rad = radix as Int;
+        let mut v = 0;
 
-        let (_, mut value) =
-            combinator::cut(combinator::success((s, radix)).map_res(|(s, radix)| {
-                // safety: the above only matches valid ascii
-                let s = unsafe { core::str::from_utf8_unchecked(s) };
-                Int::from_str_radix(s, radix)
-            }))
-            .parse(number_start)?;
-
-        if sign.unwrap_or('+') == '-' {
-            value = -value;
+        if src.len() <= core::mem::size_of::<Int>() * 2 - 1 {
+            // this is guaranteed not to overflow, there's not enough digits
+            if is_positive {
+                for c in src {
+                    v = v * rad + unwrap!((*c as char).to_digit(radix)) as Int;
+                }
+            } else {
+                for c in src {
+                    v = v * rad - unwrap!((*c as char).to_digit(radix)) as Int;
+                }
+            }
+        } else {
+            // this might overflow
+            if is_positive {
+                for c in src {
+                    let mul = v.checked_mul(rad);
+                    let x = unwrap!((*c as char).to_digit(radix)) as Int;
+                    v = mul.ok_or(TokenError::IntRange)?;
+                    v = v.checked_add(x).ok_or(TokenError::IntRange)?;
+                }
+            } else {
+                for c in src {
+                    let mul = v.checked_mul(rad);
+                    let x = unwrap!((*c as char).to_digit(radix)) as Int;
+                    v = mul.ok_or(TokenError::IntRange)?;
+                    v = v.checked_sub(x).ok_or(TokenError::IntRange)?;
+                }
+            }
         }
 
-        Ok((input, Token::Value(Value::Int(value))))
+        Ok(v)
+    }
+
+    fn integer<'a>(input: &'a [u8]) -> IResult<&'a [u8], Token<'a>> {
+        let (rest, is_positive) = combinator::opt(character::one_of("-+"))
+            .map(|s| s.unwrap_or('+') == '+')
+            .parse(input)?;
+
+        let (rest, value) = branch::alt((
+            sequence::delimited(
+                (character::char('0'), character::one_of("xX")),
+                character::hex_digit1.map(|s| Self::from_ascii_radix(is_positive, s, 16)),
+                Self::token_boundary,
+            ),
+            sequence::delimited(
+                (character::char('0'), character::one_of("oO")),
+                character::oct_digit1.map(|s| Self::from_ascii_radix(is_positive, s, 8)),
+                Self::token_boundary,
+            ),
+            sequence::delimited(
+                (character::char('0'), character::one_of("bB")),
+                character::bin_digit1.map(|s| Self::from_ascii_radix(is_positive, s, 2)),
+                Self::token_boundary,
+            ),
+            sequence::terminated(
+                character::digit1.map(|s| Self::from_ascii_radix(is_positive, s, 10)),
+                Self::token_boundary,
+            ),
+        ))
+        .parse(rest)?;
+
+        let value = value.map_err(|e| nom::Err::Failure(NomError { input, error: e }))?;
+
+        Ok((rest, Token::Value(Value::Int(value))))
     }
 
     fn float<'a>(input: &'a [u8]) -> IResult<&'a [u8], Token<'a>> {
@@ -737,6 +753,13 @@ mod test {
         Value(Int(0b10)),
         Value(Int(-0b11)),
         Value(Int(0b111)),
+    );
+    token_test!(
+        val_ints_limit,
+        // max and min for Int
+        "   \n  0x7fffffffffffffff -0x8000000000000000",
+        Value(Int(crate::syntax::Int::MAX)),
+        Value(Int(crate::syntax::Int::MIN)),
     );
     any_tokens_test!(
         #[should_panic(expected = "IntRange")]
