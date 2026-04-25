@@ -2,7 +2,7 @@ use serde::de;
 
 use crate::de::{ParseError, TokenError};
 use crate::fmt::FormatIter;
-use crate::syntax::{Float, Int};
+use crate::syntax::Int;
 use crate::types::UnescapeError;
 
 /// Errors produced by [Deserializer](super::Deserializer).
@@ -18,9 +18,6 @@ pub enum Error {
     /// An integer did not fit into the deserialized type.
     #[error("integer out of range: {0}")]
     IntRange(Int),
-    /// A float did not fit into the deserialized type.
-    #[error("float out of range: {0}")]
-    FloatRange(Float),
     /// There is not enough room in the unescape buffer.
     #[error("unescape buffer full")]
     UnescapeBufferFull,
