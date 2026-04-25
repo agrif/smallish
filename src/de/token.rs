@@ -16,6 +16,9 @@ pub enum TokenError {
     /// The tokenizer found something it didn't recognize.
     #[error("unknown token")]
     UnknownToken,
+    /// An integer literal was too big to fit into [Int].
+    #[error("integer out of range")]
+    IntRange,
     /// There is invalid utf-8 inside a string literal.
     #[error("invalid utf-8")]
     InvalidUtf8,
@@ -62,11 +65,15 @@ impl<I> error::FromExternalError<I, NomError<I>> for NomError<I> {
 impl<I> error::FromExternalError<I, core::num::ParseIntError> for NomError<I> {
     fn from_external_error(
         input: I,
-        kind: error::ErrorKind,
+        _kind: error::ErrorKind,
         _err: core::num::ParseIntError,
     ) -> Self {
-        use error::ParseError;
-        Self::from_error_kind(input, kind)
+        // we accept valid integer literals in the tokenizer, so
+        // this can only happen if the result is too big
+        NomError {
+            input,
+            error: TokenError::IntRange,
+        }
     }
 }
 
@@ -275,9 +282,9 @@ impl<'de> Tokenizer<'de> {
     }
 
     fn integer<'a>(input: &'a [u8]) -> IResult<&'a [u8], Token<'a>> {
-        let (input, sign) = combinator::opt(character::one_of("-+")).parse(input)?;
+        let (number_start, sign) = combinator::opt(character::one_of("-+")).parse(input)?;
 
-        let (input, mut value) = branch::alt((
+        let (input, (s, radix)) = branch::alt((
             sequence::terminated(
                 sequence::preceded(
                     (character::char('0'), character::one_of("xX")),
@@ -301,12 +308,15 @@ impl<'de> Tokenizer<'de> {
             ),
             sequence::terminated(character::digit1.map(|s| (s, 10)), Self::token_boundary),
         ))
-        .map_res(|(s, radix)| {
-            // safety: the above only matches valid ascii
-            let s = unsafe { core::str::from_utf8_unchecked(s) };
-            Int::from_str_radix(s, radix)
-        })
-        .parse(input)?;
+        .parse(number_start)?;
+
+        let (_, mut value) =
+            combinator::cut(combinator::success((s, radix)).map_res(|(s, radix)| {
+                // safety: the above only matches valid ascii
+                let s = unsafe { core::str::from_utf8_unchecked(s) };
+                Int::from_str_radix(s, radix)
+            }))
+            .parse(number_start)?;
 
         if sign.unwrap_or('+') == '-' {
             value = -value;
@@ -729,7 +739,7 @@ mod test {
         Value(Int(0b111)),
     );
     any_tokens_test!(
-        #[should_panic(expected = "UnknownToken")]
+        #[should_panic(expected = "IntRange")]
         val_int_huge,
         // too big to fit (96 bits)
         "   \n  0xffffffffffffffffffffffff ",
