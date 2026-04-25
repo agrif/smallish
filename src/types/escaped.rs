@@ -1,4 +1,4 @@
-use core::borrow::Borrow;
+use core::ops::Deref;
 
 use nom::{combinator, multi, Parser};
 
@@ -35,7 +35,7 @@ pub enum EscapedFragment<Slice, Item> {
 /// them into a plain string.
 ///
 /// Most of the methods require that `T: Escapeable`, which
-/// essentially means you can [Borrow] `T` as either `&str` or
+/// essentially means you can [Deref] `T` as either `&str` or
 /// `&[u8]`. This covers almost all string-like and bytes-like types.
 ///
 /// [Escaped] implements [Deref](core::ops::Deref), and can be used in
@@ -77,22 +77,20 @@ impl<T> Escaped<T> {
     /// (usually from a bad escape sequence), this will fail.
     ///
     /// To avoid this check, see [new_unchecked](Self::new_unchecked).
-    pub fn new<B, I>(s: T) -> Result<Self, TokenError>
+    pub fn new<I>(s: T) -> Result<Self, TokenError>
     where
-        T: Escapeable<B, I>,
-        B: ?Sized,
+        T: Escapeable<I>,
     {
         let escaped = Self(s);
         escaped.check()?;
         Ok(escaped)
     }
 
-    fn check<B, I>(&self) -> Result<(), TokenError>
+    fn check<I>(&self) -> Result<(), TokenError>
     where
-        T: Escapeable<B, I>,
-        B: ?Sized,
+        T: Escapeable<I>,
     {
-        let input = T::as_bytes(self.0.borrow());
+        let input = T::as_bytes(&self.0);
         match combinator::recognize(multi::many0_count(T::chunk)).parse(input) {
             Ok((b"", _)) => Ok(()),
             Ok(_) => Err(TokenError::UnknownToken),
@@ -107,12 +105,11 @@ impl<T> Escaped<T> {
     /// This will also return `true` if the contained value has
     /// errors. Calling [unescape](Self::unescape) in that case will
     /// tell you exactly which error.
-    pub fn has_escapes<B, I>(&self) -> bool
+    pub fn has_escapes<I>(&self) -> bool
     where
-        T: Escapeable<B, I>,
-        B: ?Sized,
+        T: Escapeable<I>,
     {
-        let bytes = T::as_bytes(self.0.borrow());
+        let bytes = T::as_bytes(&self.0);
 
         // chunk always consumes some data, so we special-case empty strings
         if bytes.is_empty() {
@@ -133,15 +130,14 @@ impl<T> Escaped<T> {
     ///
     /// If you have used [new_unchecked](Self::new_unchecked), it may
     /// also yield an error, usually due to an unknown escape.
-    pub fn fragments<'a, B, I>(
+    pub fn fragments<'a, I>(
         &'a self,
-    ) -> impl Iterator<Item = Result<EscapedFragment<&'a B, I>, TokenError>>
+    ) -> impl Iterator<Item = Result<EscapedFragment<&'a T::Target, I>, TokenError>>
     where
-        T: Escapeable<B, I>,
-        B: ?Sized + 'a,
+        T: Escapeable<I>,
     {
-        FragmentIterator::<'a, T, B, I> {
-            input: T::as_bytes(self.0.borrow()),
+        FragmentIterator::<'a, T, I> {
+            input: T::as_bytes(&self.0),
             _marker: Default::default(),
         }
     }
@@ -160,13 +156,12 @@ impl<T> Escaped<T> {
     /// escapes. If you need zero-copy behavior, check
     /// [has_escapes](Self::has_escapes) first to see if it is even
     /// necessary to call this function.
-    pub fn unescape<'buf, B, I>(
+    pub fn unescape<'buf, I>(
         &self,
         buffer: &'buf mut [u8],
-    ) -> Result<(&'buf mut [u8], &'buf B), UnescapeError>
+    ) -> Result<(&'buf mut [u8], &'buf T::Target), UnescapeError>
     where
-        T: Escapeable<B, I>,
-        B: ?Sized,
+        T: Escapeable<I>,
         I: Copy,
     {
         let mut i = 0;
@@ -222,21 +217,24 @@ impl<T> Escaped<T> {
 
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-struct FragmentIterator<'a, T, B: ?Sized, I> {
+struct FragmentIterator<'a, T, I> {
     input: &'a [u8],
-    _marker: core::marker::PhantomData<(T, &'a B, I)>,
+    _marker: core::marker::PhantomData<(T, I)>,
 }
 
-impl<'a, T, B: ?Sized, I> core::iter::FusedIterator for FragmentIterator<'a, T, B, I> where
-    T: Escapeable<B, I>
-{
-}
-
-impl<'a, T, B: ?Sized, I> Iterator for FragmentIterator<'a, T, B, I>
+impl<'a, T, I> core::iter::FusedIterator for FragmentIterator<'a, T, I>
 where
-    T: Escapeable<B, I>,
+    T: Escapeable<I>,
+    T::Target: 'a,
 {
-    type Item = Result<EscapedFragment<&'a B, I>, TokenError>;
+}
+
+impl<'a, T, I> Iterator for FragmentIterator<'a, T, I>
+where
+    T: Escapeable<I>,
+    T::Target: 'a,
+{
+    type Item = Result<EscapedFragment<&'a T::Target, I>, TokenError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.input.is_empty() {
@@ -259,7 +257,7 @@ where
     }
 }
 
-impl<T> core::ops::Deref for Escaped<T> {
+impl<T> Deref for Escaped<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -271,27 +269,27 @@ impl<T> core::ops::Deref for Escaped<T> {
 ///
 /// This trait is sealed, meaning it can only be implemented by this
 /// crate. However, it comes with implementations for any type that
-/// implements the [Borrow] trait and yields `&str` or `&[u8]`.
+/// implements the [Deref] trait and yields `&str` or `&[u8]`.
 #[allow(private_bounds)]
-pub trait Escapeable<Slice: ?Sized, Item>: SealedEscapeable<Slice, Item> {}
+pub trait Escapeable<Item>: SealedEscapeable<Item> + Deref {}
 
-trait SealedEscapeable<Slice: ?Sized, Item>: Borrow<Slice> {
-    fn chunk(input: &[u8]) -> IResult<&[u8], EscapedFragment<&Slice, Item>>;
+trait SealedEscapeable<Item>: Deref {
+    fn chunk(input: &[u8]) -> IResult<&[u8], EscapedFragment<&Self::Target, Item>>;
 
-    fn as_bytes(slice: &Slice) -> &[u8];
+    fn as_bytes(slice: &Self::Target) -> &[u8];
 
     fn item_len(item: Item) -> usize;
 
     fn item_write(item: Item, buf: &mut [u8]);
 
-    fn finalize(slice: &[u8]) -> &Slice;
+    fn finalize(slice: &[u8]) -> &Self::Target;
 }
 
-impl<T> Escapeable<str, char> for T where T: Borrow<str> {}
+impl<T> Escapeable<char> for T where T: Deref<Target = str> {}
 
-impl<T> SealedEscapeable<str, char> for T
+impl<T> SealedEscapeable<char> for T
 where
-    T: Borrow<str>,
+    T: Deref<Target = str>,
 {
     fn chunk(input: &[u8]) -> IResult<&[u8], EscapedFragment<&str, char>> {
         Tokenizer::string_chunk(input)
@@ -316,11 +314,11 @@ where
     }
 }
 
-impl<T> Escapeable<[u8], u8> for T where T: Borrow<[u8]> {}
+impl<T> Escapeable<u8> for T where T: Deref<Target = [u8]> {}
 
-impl<T> SealedEscapeable<[u8], u8> for T
+impl<T> SealedEscapeable<u8> for T
 where
-    T: Borrow<[u8]>,
+    T: Deref<Target = [u8]>,
 {
     fn chunk(input: &[u8]) -> IResult<&[u8], EscapedFragment<&[u8], u8>> {
         Tokenizer::bytes_chunk(input)
