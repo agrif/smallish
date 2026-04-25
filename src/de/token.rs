@@ -275,6 +275,8 @@ impl<'de> Tokenizer<'de> {
         let rad = radix as Int;
         let mut v = 0;
 
+        // keep this weird phrasing to follow Int::from_ascii_radix source
+        #[allow(clippy::int_plus_one)]
         if src.len() <= core::mem::size_of::<Int>() * 2 - 1 {
             // this is guaranteed not to overflow, there's not enough digits
             if is_positive {
