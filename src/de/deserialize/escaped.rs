@@ -66,9 +66,9 @@ where
     where
         V: de::Visitor<'de>,
     {
-        let v = self.de.next_with(|t| {
-            as_variant!(t, Event::Value).and_then(as_variant!(Value::Str(v) => v))
-        })?;
+        let v = self
+            .de
+            .next_with(as_variant!(Event::Value(Value::Str(v)) => v))?;
         visitor.visit_borrowed_str(*v)
     }
 
@@ -83,9 +83,9 @@ where
     where
         V: de::Visitor<'de>,
     {
-        let v = self.de.next_with(|t| {
-            as_variant!(t, Event::Value).and_then(as_variant!(Value::Bytes(v) => v))
-        })?;
+        let v = self
+            .de
+            .next_with(as_variant!(Event::Value(Value::Bytes(v)) => v))?;
         visitor.visit_borrowed_bytes(*v)
     }
 

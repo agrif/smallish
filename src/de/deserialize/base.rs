@@ -250,9 +250,7 @@ where
     where
         V: de::Visitor<'de>,
     {
-        let v = self.next_with(|t| {
-            as_variant!(t, Event::Value).and_then(as_variant!(Value::Bool(v) => v))
-        })?;
+        let v = self.next_with(as_variant!(Event::Value(Value::Bool(v)) => v))?;
         visitor.visit_bool(v)
     }
 
@@ -260,9 +258,7 @@ where
     where
         V: de::Visitor<'de>,
     {
-        let v = self.next_with(|t| {
-            as_variant!(t, Event::Value).and_then(as_variant!(Value::Int(v) => v))
-        })?;
+        let v = self.next_with(as_variant!(Event::Value(Value::Int(v)) => v))?;
         let v = v.try_into().map_err(|_| Error::IntRange(v))?;
         visitor.visit_i8(v)
     }
@@ -271,9 +267,7 @@ where
     where
         V: de::Visitor<'de>,
     {
-        let v = self.next_with(|t| {
-            as_variant!(t, Event::Value).and_then(as_variant!(Value::Int(v) => v))
-        })?;
+        let v = self.next_with(as_variant!(Event::Value(Value::Int(v)) => v))?;
         let v = v.try_into().map_err(|_| Error::IntRange(v))?;
         visitor.visit_u8(v)
     }
@@ -282,9 +276,7 @@ where
     where
         V: de::Visitor<'de>,
     {
-        let v = self.next_with(|t| {
-            as_variant!(t, Event::Value).and_then(as_variant!(Value::Int(v) => v))
-        })?;
+        let v = self.next_with(as_variant!(Event::Value(Value::Int(v)) => v))?;
         let v = v.try_into().map_err(|_| Error::IntRange(v))?;
         visitor.visit_i16(v)
     }
@@ -293,9 +285,7 @@ where
     where
         V: de::Visitor<'de>,
     {
-        let v = self.next_with(|t| {
-            as_variant!(t, Event::Value).and_then(as_variant!(Value::Int(v) => v))
-        })?;
+        let v = self.next_with(as_variant!(Event::Value(Value::Int(v)) => v))?;
         let v = v.try_into().map_err(|_| Error::IntRange(v))?;
         visitor.visit_u16(v)
     }
@@ -304,9 +294,7 @@ where
     where
         V: de::Visitor<'de>,
     {
-        let v = self.next_with(|t| {
-            as_variant!(t, Event::Value).and_then(as_variant!(Value::Int(v) => v))
-        })?;
+        let v = self.next_with(as_variant!(Event::Value(Value::Int(v)) => v))?;
         let v = v.try_into().map_err(|_| Error::IntRange(v))?;
         visitor.visit_i32(v)
     }
@@ -315,9 +303,7 @@ where
     where
         V: de::Visitor<'de>,
     {
-        let v = self.next_with(|t| {
-            as_variant!(t, Event::Value).and_then(as_variant!(Value::Int(v) => v))
-        })?;
+        let v = self.next_with(as_variant!(Event::Value(Value::Int(v)) => v))?;
         let v = v.try_into().map_err(|_| Error::IntRange(v))?;
         visitor.visit_u32(v)
     }
@@ -326,9 +312,7 @@ where
     where
         V: de::Visitor<'de>,
     {
-        let v = self.next_with(|t| {
-            as_variant!(t, Event::Value).and_then(as_variant!(Value::Int(v) => v))
-        })?;
+        let v = self.next_with(as_variant!(Event::Value(Value::Int(v)) => v))?;
         visitor.visit_i64(v)
     }
 
@@ -336,9 +320,7 @@ where
     where
         V: de::Visitor<'de>,
     {
-        let v = self.next_with(|t| {
-            as_variant!(t, Event::Value).and_then(as_variant!(Value::Int(v) => v))
-        })?;
+        let v = self.next_with(as_variant!(Event::Value(Value::Int(v)) => v))?;
         let v = v.try_into().map_err(|_| Error::IntRange(v))?;
         visitor.visit_u64(v)
     }
@@ -347,9 +329,7 @@ where
     where
         V: de::Visitor<'de>,
     {
-        let v = self.next_with(|t| {
-            as_variant!(t, Event::Value).and_then(as_variant!(Value::Int(v) => v))
-        })?;
+        let v = self.next_with(as_variant!(Event::Value(Value::Int(v)) => v))?;
         let v = v.into();
         visitor.visit_i128(v)
     }
@@ -358,9 +338,7 @@ where
     where
         V: de::Visitor<'de>,
     {
-        let v = self.next_with(|t| {
-            as_variant!(t, Event::Value).and_then(as_variant!(Value::Int(v) => v))
-        })?;
+        let v = self.next_with(as_variant!(Event::Value(Value::Int(v)) => v))?;
         let v = v.try_into().map_err(|_| Error::IntRange(v))?;
         visitor.visit_u128(v)
     }
@@ -369,9 +347,7 @@ where
     where
         V: de::Visitor<'de>,
     {
-        let v = self.next_with(|t| {
-            as_variant!(t, Event::Value).and_then(as_variant!(Value::Float(v) => v))
-        })?;
+        let v = self.next_with(as_variant!(Event::Value(Value::Float(v)) => v))?;
         visitor.visit_f32(v)
     }
 
@@ -379,9 +355,7 @@ where
     where
         V: de::Visitor<'de>,
     {
-        let v = self.next_with(|t| {
-            as_variant!(t, Event::Value).and_then(as_variant!(Value::Float(v) => v))
-        })?;
+        let v = self.next_with(as_variant!(Event::Value(Value::Float(v)) => v))?;
         let v = v.into();
         visitor.visit_f64(v)
     }
@@ -390,9 +364,7 @@ where
     where
         V: de::Visitor<'de>,
     {
-        let v = self.next_with(|t| {
-            as_variant!(t, Event::Value).and_then(as_variant!(Value::Char(v) => v))
-        })?;
+        let v = self.next_with(as_variant!(Event::Value(Value::Char(v)) => v))?;
         visitor.visit_char(v)
     }
 
@@ -400,10 +372,7 @@ where
     where
         V: de::Visitor<'de>,
     {
-        let v = self.next_with(|t| {
-            as_variant!(t, Event::Value).and_then(as_variant!(Value::Str(v) => v))
-        })?;
-
+        let v = self.next_with(as_variant!(Event::Value(Value::Str(v)) => v))?;
         if !v.has_escapes() {
             visitor.visit_borrowed_str(*v)
         } else {
@@ -425,10 +394,7 @@ where
     where
         V: de::Visitor<'de>,
     {
-        let v = self.next_with(|t| {
-            as_variant!(t, Event::Value).and_then(as_variant!(Value::Bytes(v) => v))
-        })?;
-
+        let v = self.next_with(as_variant!(Event::Value(Value::Bytes(v)) => v))?;
         if !v.has_escapes() {
             visitor.visit_borrowed_bytes(*v)
         } else {
@@ -451,7 +417,7 @@ where
         V: de::Visitor<'de>,
     {
         if self
-            .peek_with(|t| as_variant!(t, Event::Value).and_then(as_variant!(Value::None => ())))?
+            .peek_with(as_variant!(Event::Value(Value::None) => ()))?
             .is_some()
         {
             self.consume();
@@ -465,7 +431,7 @@ where
     where
         V: de::Visitor<'de>,
     {
-        self.next_with(|t| as_variant!(t, Event::Value).and_then(as_variant!(Value::Unit => ())))?;
+        self.next_with(as_variant!(Event::Value(Value::Unit) => ()))?;
         visitor.visit_unit()
     }
 
