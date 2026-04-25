@@ -94,11 +94,34 @@ impl<'de, T> Located<'de, T> {
         Some(&source[start..end])
     }
 
-    pub(crate) fn advance(&mut self, start: &'de [u8], end: &'de [u8]) {
-        // this should be a cheap subslice check, but this works for now
-        assert!(end.len() <= start.len(), "bad start/end to advance");
+    // slice::subslice_range but on stable (and restricted to &[u8])
+    fn subslice_range(slice: &[u8], subslice: &[u8]) -> Option<core::ops::Range<usize>> {
+        let slice_start = slice.as_ptr().addr();
+        let subslice_start = subslice.as_ptr().addr();
 
-        let new = &start[..start.len() - end.len()];
+        let start = subslice_start.wrapping_sub(slice_start);
+        let end = start.wrapping_add(subslice.len());
+
+        if start <= slice.len() && end <= slice.len() {
+            Some(start..end)
+        } else {
+            None
+        }
+    }
+
+    pub(crate) fn advance(&mut self, start: &'de [u8], end: &'de [u8]) {
+        let start_idx = if let Some(range) = Self::subslice_range(start, end) {
+            assert_eq!(
+                range.end,
+                start.len(),
+                "end is not a trailing part of start"
+            );
+            range.start
+        } else {
+            panic!("end is not a subslice of start");
+        };
+
+        let new = &start[..start_idx];
         let amt = new.len();
         let mut newlines = 0;
         let mut last_newline = None;
@@ -416,7 +439,8 @@ mod test {
             offset: 10,
             value: (),
         };
-        loc.advance(b"this is source", b"is source");
+        let src = b"this is source";
+        loc.advance(src, &src[5..]);
         assert_eq!(loc.line, 3);
         assert_eq!(loc.column, 5 + 5);
         assert_eq!(loc.offset, 10 + 5);
@@ -432,7 +456,8 @@ mod test {
             offset: 10,
             value: (),
         };
-        loc.advance(b"this\nis source", b"source");
+        let src = b"this\nis source";
+        loc.advance(src, &src[8..]);
         assert_eq!(loc.line, 3 + 1);
         assert_eq!(loc.column, 3);
         assert_eq!(loc.offset, 10 + 8);
@@ -448,7 +473,8 @@ mod test {
             offset: 10,
             value: (),
         };
-        loc.advance(b"this\nis\nsource", b"source");
+        let src = b"this\nis\nsource";
+        loc.advance(src, &src[8..]);
         assert_eq!(loc.line, 3 + 2);
         assert_eq!(loc.column, 0);
         assert_eq!(loc.offset, 10 + 8);
