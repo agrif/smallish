@@ -23,7 +23,7 @@ pub enum Error {
     FloatRange(Float),
     /// There is not enough room in the unescape buffer.
     #[error("unescape buffer full")]
-    BufferFull,
+    UnescapeBufferFull,
 
     /// Custom `serde` error (via [serde::de::Error::custom]).
     ///
@@ -70,7 +70,7 @@ impl From<UnescapeError> for Error {
     fn from(other: UnescapeError) -> Self {
         match other {
             UnescapeError::UnknownEscape => Error::Parse(ParseError::UnknownEscape),
-            UnescapeError::BufferFull => Error::BufferFull,
+            UnescapeError::BufferFull => Error::UnescapeBufferFull,
         }
     }
 }

@@ -33,7 +33,7 @@ where
     /// The `unescape` argument is a scratch buffer where strings and
     /// bytes that contain escapes are un-escaped. If this buffer
     /// fills completely, deserialization will fail with
-    /// [Error::BufferFull]. To avoid this, either provide a larger
+    /// [Error::UnescapeBufferFull]. To avoid this, either provide a larger
     /// buffer or use [Escaped].
     ///
     /// It is valid to provide an empty buffer for `unescape` if you
@@ -904,7 +904,7 @@ mod test {
         use crate::from_slice_escaped;
         let mut buf = [0; 0];
         let e = from_slice_escaped::<&str>(Flavor::Value, br#" "\n" "#, &mut buf).unwrap_err();
-        assert_eq!(Error::BufferFull, *e);
+        assert_eq!(Error::UnescapeBufferFull, *e);
     }
 
     de_test!(val_bytes, Value, r#" b"hello" "#, b"hello", &[u8]);
@@ -930,7 +930,7 @@ mod test {
         use crate::from_slice_escaped;
         let mut buf = [0; 0];
         let e = from_slice_escaped::<&[u8]>(Flavor::Value, br#" b"\n" "#, &mut buf).unwrap_err();
-        assert_eq!(Error::BufferFull, *e);
+        assert_eq!(Error::UnescapeBufferFull, *e);
     }
 
     #[derive(Debug, PartialEq, Eq, serde::Deserialize)]

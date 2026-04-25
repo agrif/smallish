@@ -65,8 +65,9 @@ macro_rules! default_state_size {
 /// [MaxRecursion](de::ParseError::MaxRecursion) error, please use
 /// [Deserializer](de::Deserializer) directly.
 ///
-/// This function will return [BufferFull](de::Error::BufferFull) if
-/// the input contains escaped strings or escaped bytes. Use
+/// This function will return
+/// [UnescapeBufferFull](de::Error::UnescapeBufferFull) if the input
+/// contains escaped strings or escaped bytes. Use
 /// [from_slice_escaped] instead, or opt-out of unescaping with
 /// [Escaped](types::Escaped).
 ///
@@ -93,8 +94,9 @@ where
 /// [Deserializer](de::Deserializer) directly.
 ///
 /// This uses `unescape` as a scratch buffer to remove escapes from
-/// strings and bytes. If this buffer runs out of space, this
-/// function returns [BufferFull](de::Error::BufferFull). Consider
+/// strings and bytes. If this buffer runs out of space, this function
+/// returns
+/// [UnescapeBufferFull](de::Error::UnescapeBufferFull). Consider
 /// using a larger buffer, or using [Escaped](types::Escaped).
 ///
 /// For deserializing from strings, see [from_str_escaped].
@@ -120,10 +122,10 @@ where
 /// [MaxRecursion](de::ParseError::MaxRecursion) error, please use
 /// [Deserializer](de::Deserializer) directly.
 ///
-/// This function will return [BufferFull](de::Error::BufferFull) if
-/// the input contains escaped strings or escaped bytes. Use
-/// [from_str_escaped] instead, or opt-out of unescaping with
-/// [Escaped](types::Escaped).
+/// This function will return
+/// [UnescapeBufferFull](de::Error::UnescapeBufferFull) if the input
+/// contains escaped strings or escaped bytes. Use [from_str_escaped]
+/// instead, or opt-out of unescaping with [Escaped](types::Escaped).
 ///
 /// For deserializing from bytes, see [from_slice].
 pub fn from_str<'de, T>(
@@ -147,8 +149,9 @@ where
 /// [Deserializer](de::Deserializer) directly.
 ///
 /// This uses `unescape` as a scratch buffer to remove escapes from
-/// strings and bytes. If this buffer runs out of space, this
-/// function returns [BufferFull](de::Error::BufferFull). Consider
+/// strings and bytes. If this buffer runs out of space, this function
+/// returns
+/// [UnescapeBufferFull](de::Error::UnescapeBufferFull). Consider
 /// using a larger buffer, or using [Escaped](types::Escaped).
 ///
 /// For deserializing from bytes, see [from_slice_escaped].
