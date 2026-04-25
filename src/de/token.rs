@@ -22,6 +22,9 @@ pub enum TokenError {
     /// There is an invalid escape sequence inside a string or bytes literal.
     #[error("unknown escape sequence")]
     UnknownEscape,
+    /// There is an invalid character literal.
+    #[error("invalid character literal")]
+    InvalidCharLiteral,
 }
 
 #[derive(Clone, Debug)]
@@ -29,12 +32,6 @@ pub enum TokenError {
 pub(crate) struct NomError<I> {
     input: I,
     pub(crate) error: TokenError,
-}
-
-impl<I> NomError<I> {
-    fn replace(self, error: TokenError) -> Self {
-        Self { error, ..self }
-    }
 }
 
 impl<I> error::ParseError<I> for NomError<I> {
@@ -47,6 +44,12 @@ impl<I> error::ParseError<I> for NomError<I> {
 
     fn append(_input: I, _kind: error::ErrorKind, other: Self) -> Self {
         other
+    }
+}
+
+impl<I> error::FromExternalError<I, TokenError> for NomError<I> {
+    fn from_external_error(input: I, _kind: error::ErrorKind, err: TokenError) -> Self {
+        NomError { input, error: err }
     }
 }
 
@@ -372,9 +375,9 @@ impl<'de> Tokenizer<'de> {
                 }),
                 character::char('}'),
             ),
+            combinator::success(()).map_res(|_| Err(TokenError::UnknownEscape)),
         ))
         .parse(input)
-        .map_err(|e| e.map(|e: NomError<_>| e.replace(TokenError::UnknownEscape)))
     }
 
     fn string_escape(input: &[u8]) -> IResult<&[u8], EscapedFragment<&str, char>> {
@@ -433,9 +436,9 @@ impl<'de> Tokenizer<'de> {
                     u8::from_str_radix(v, 16).ok()
                 }),
             ),
+            combinator::success(()).map_res(|_| Err(TokenError::UnknownEscape)),
         ))
         .parse(input)
-        .map_err(|e| e.map(|e: NomError<_>| e.replace(TokenError::UnknownEscape)))
     }
 
     fn bytes_escape(input: &[u8]) -> IResult<&[u8], EscapedFragment<&[u8], u8>> {
@@ -466,34 +469,36 @@ impl<'de> Tokenizer<'de> {
         sequence::delimited(
             character::char('\''),
             combinator::cut(branch::alt((
-                sequence::preceded(
+                sequence::delimited(
                     character::char('\\'),
                     combinator::cut(Self::character_escape),
+                    bytes::take_until("'").map_res(|s: &[u8]| {
+                        s.is_empty()
+                            .then_some(())
+                            .ok_or(TokenError::InvalidCharLiteral)
+                    }),
                 ),
-                bytes::take_until("'").map_res(|s: &[u8]| {
-                    if s.len() > 4 {
-                        return Err(NomError {
-                            input,
-                            error: TokenError::UnknownToken,
-                        });
-                    }
-                    let s = core::str::from_utf8(s).map_err(|_| NomError {
-                        input: input.get(1..).unwrap_or(&[]),
-                        error: TokenError::InvalidUtf8,
-                    })?;
-                    let mut chars = s.chars();
-                    let c = chars.next().ok_or(NomError {
-                        input,
-                        error: TokenError::UnknownToken,
-                    });
-                    if chars.next().is_some() {
-                        return Err(NomError {
-                            input,
-                            error: TokenError::UnknownToken,
-                        });
-                    }
-                    c
-                }),
+                bytes::take_until("'")
+                    .map_res(|s: &[u8]| {
+                        // utf-8 'characters' are always at most 4 bytes
+                        (s.len() <= 4)
+                            .then_some(s)
+                            .ok_or(TokenError::InvalidCharLiteral)
+                    })
+                    .map_res(|s| {
+                        core::str::from_utf8(s).map_err(|_| NomError {
+                            input: input.get(1..).unwrap_or(&[]),
+                            error: TokenError::InvalidUtf8,
+                        })
+                    })
+                    .map_res(|s| {
+                        let mut chars = s.chars();
+                        let c = chars.next().ok_or(TokenError::InvalidCharLiteral)?;
+                        if chars.next().is_some() {
+                            return Err(TokenError::InvalidCharLiteral);
+                        }
+                        Ok(c)
+                    }),
             ))),
             character::char('\''),
         )
@@ -765,17 +770,17 @@ mod test {
         Value(Character('🄯')),
     );
     any_tokens_test!(
-        #[should_panic(expected = "UnknownToken")]
+        #[should_panic(expected = "InvalidCharLiteral")]
         val_char_empty,
         "      '' "
     );
     any_tokens_test!(
-        #[should_panic(expected = "UnknownToken")]
+        #[should_panic(expected = "InvalidCharLiteral")]
         val_char_too_many,
         "      'aa' "
     );
     any_tokens_test!(
-        #[should_panic(expected = "UnknownToken")]
+        #[should_panic(expected = "InvalidCharLiteral")]
         val_char_way_too_many,
         "      'aaaaa' "
     );
