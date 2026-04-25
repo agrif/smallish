@@ -4,6 +4,7 @@ use nom::{combinator, multi, Parser};
 
 use crate::de::token::{IResult, NomError};
 use crate::de::{TokenError, Tokenizer};
+use crate::types::Located;
 
 /// Errors encountered by [Escaped].
 #[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
@@ -77,40 +78,59 @@ impl<T> Escaped<T> {
     /// This is checked for validity: if the value has a bad escape
     /// sequence, this will fail.
     ///
+    /// Note that due to lifetime requirements, the returned error is
+    /// [Located] but does not have an attached source. If you want to
+    /// attach the source yourself, use [Located::with_source] to
+    /// attach the same value you passed in here.
+    ///
     /// To avoid this check, see [new_unchecked](Self::new_unchecked).
-    pub fn new<I>(s: T) -> Result<Self, UnescapeError>
+    pub fn new<I>(s: T) -> Result<Self, Located<'static, UnescapeError>>
     where
         T: Escapeable<I>,
     {
         let escaped = Self(s);
-        escaped.check()?;
+        escaped.check().map_err(|loc| loc.without_source())?;
         Ok(escaped)
     }
 
-    fn from_nom_error(error: nom::Err<NomError<&[u8]>>) -> UnescapeError {
+    fn convert_nom_error<'a, I>(
+        &'a self,
+        error: nom::Err<NomError<&'a [u8]>>,
+    ) -> Located<'a, UnescapeError>
+    where
+        T: Escapeable<I>,
+    {
+        let src = T::as_bytes(&self.0);
+
         // this can only produce UnknownEscape, but check when we can
-        match error {
-            nom::Err::Incomplete(_) => UnescapeError::UnknownEscape,
+        let (rest, err) = match error {
+            nom::Err::Incomplete(_) => (src, UnescapeError::UnknownEscape),
             nom::Err::Error(e) | nom::Err::Failure(e) => {
                 assert_eq!(
                     e.error,
                     TokenError::UnknownEscape,
                     "string/bytes tokenizer error other than UnknownEscape"
                 );
-                UnescapeError::UnknownEscape
+                (e.input, UnescapeError::UnknownEscape)
             }
-        }
+        };
+
+        let mut loc = Located::new().with_source(Some(src)).replace(err);
+        loc.advance(src, rest);
+        loc
     }
 
-    fn check<I>(&self) -> Result<(), UnescapeError>
+    fn check<'a, I>(&'a self) -> Result<(), Located<'a, UnescapeError>>
     where
         T: Escapeable<I>,
     {
         let input = T::as_bytes(&self.0);
         match combinator::recognize(multi::many0_count(T::chunk)).parse(input) {
             Ok((b"", _)) => Ok(()),
-            Ok(_) => Err(UnescapeError::UnknownEscape),
-            Err(e) => Err(Self::from_nom_error(e)),
+            Ok(_) => Err(Located::new()
+                .with_source(Some(input))
+                .replace(UnescapeError::UnknownEscape)),
+            Err(e) => Err(self.convert_nom_error(e)),
         }
     }
 
@@ -147,12 +167,13 @@ impl<T> Escaped<T> {
     /// also yield an error due to an unknown escape.
     pub fn fragments<'a, I>(
         &'a self,
-    ) -> impl Iterator<Item = Result<EscapedFragment<&'a T::Target, I>, UnescapeError>>
+    ) -> impl Iterator<Item = Result<EscapedFragment<&'a T::Target, I>, Located<'a, UnescapeError>>>
     where
         T: Escapeable<I>,
     {
         FragmentIterator::<'a, T, I> {
             input: T::as_bytes(&self.0),
+            escaped: self,
             _marker: Default::default(),
         }
     }
@@ -171,15 +192,16 @@ impl<T> Escaped<T> {
     /// escapes. If you need zero-copy behavior, check
     /// [has_escapes](Self::has_escapes) first to see if it is even
     /// necessary to call this function.
-    pub fn unescape<'buf, I>(
-        &self,
+    pub fn unescape<'a, 'buf, I>(
+        &'a self,
         buffer: &'buf mut [u8],
-    ) -> Result<(&'buf mut [u8], &'buf T::Target), UnescapeError>
+    ) -> Result<(&'buf mut [u8], &'buf T::Target), Located<'a, UnescapeError>>
     where
         T: Escapeable<I>,
         I: Copy,
     {
         let mut i = 0;
+        let src = T::as_bytes(&self.0);
         for chunk in self.fragments() {
             match chunk? {
                 EscapedFragment::Slice(s) => {
@@ -187,7 +209,11 @@ impl<T> Escaped<T> {
                     let amt = bytes.len();
                     buffer
                         .get_mut(i..i + amt)
-                        .ok_or(UnescapeError::BufferFull)?
+                        .ok_or(
+                            Located::new()
+                                .with_source(Some(src))
+                                .replace(UnescapeError::BufferFull),
+                        )?
                         .copy_from_slice(bytes);
                     i += amt;
                 }
@@ -195,9 +221,11 @@ impl<T> Escaped<T> {
                     let amt = T::item_len(c);
                     T::item_write(
                         c,
-                        buffer
-                            .get_mut(i..i + amt)
-                            .ok_or(UnescapeError::BufferFull)?,
+                        buffer.get_mut(i..i + amt).ok_or(
+                            Located::new()
+                                .with_source(Some(src))
+                                .replace(UnescapeError::BufferFull),
+                        )?,
                     );
                     i += amt;
                 }
@@ -233,8 +261,9 @@ impl<T> Escaped<T> {
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 struct FragmentIterator<'a, T, I> {
+    escaped: &'a Escaped<T>,
     input: &'a [u8],
-    _marker: core::marker::PhantomData<(T, I)>,
+    _marker: core::marker::PhantomData<I>,
 }
 
 impl<'a, T, I> core::iter::FusedIterator for FragmentIterator<'a, T, I>
@@ -249,7 +278,7 @@ where
     T: Escapeable<I>,
     T::Target: 'a,
 {
-    type Item = Result<EscapedFragment<&'a T::Target, I>, UnescapeError>;
+    type Item = Result<EscapedFragment<&'a T::Target, I>, Located<'a, UnescapeError>>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.input.is_empty() {
@@ -258,7 +287,7 @@ where
 
         match T::chunk
             .parse(self.input)
-            .map_err(Escaped::<T>::from_nom_error)
+            .map_err(|e| self.escaped.convert_nom_error(e))
         {
             Ok((rest, chunk)) => {
                 assert!(
@@ -362,64 +391,94 @@ where
 mod test {
     #[test]
     fn str_bad_escape() {
-        use super::{Escaped, UnescapeError};
-        assert_eq!(
-            Escaped::new(r#"hello\?"#),
-            Err(UnescapeError::UnknownEscape)
-        );
+        use super::{Escaped, Located, UnescapeError};
+        let err = Located {
+            source: None,
+            line: 1,
+            column: 6,
+            offset: 6,
+            value: UnescapeError::UnknownEscape,
+        };
+        assert_eq!(Escaped::new(r#"hello\?"#), Err(err));
     }
 
     #[test]
     fn bytes_bad_escape() {
-        use super::{Escaped, UnescapeError};
-        assert_eq!(
-            Escaped::new(br#"hello\?"#.as_ref()),
-            Err(UnescapeError::UnknownEscape)
-        );
+        use super::{Escaped, Located, UnescapeError};
+        let err = Located {
+            source: None,
+            line: 1,
+            column: 6,
+            offset: 6,
+            value: UnescapeError::UnknownEscape,
+        };
+        assert_eq!(Escaped::new(br#"hello\?"#.as_ref()), Err(err));
     }
 
     #[test]
     fn str_bad_escape_unchecked() {
-        use super::{Escaped, UnescapeError};
+        use super::{Escaped, Located, UnescapeError};
         let e = Escaped::new_unchecked(r#"\?"#);
         let mut buf = [0; 128];
-        assert_eq!(
-            Some(Err(UnescapeError::UnknownEscape)),
-            e.fragments().next()
-        );
-        assert_eq!(Err(UnescapeError::UnknownEscape), e.unescape(&mut buf));
+        let err = Located {
+            source: None,
+            line: 1,
+            column: 1,
+            offset: 1,
+            value: UnescapeError::UnknownEscape,
+        };
+        assert_eq!(Some(Err(err)), e.fragments().next());
+        assert_eq!(Err(err), e.unescape(&mut buf));
     }
 
     #[test]
     fn bytes_bad_escape_unchecked() {
-        use super::{Escaped, UnescapeError};
+        use super::{Escaped, Located, UnescapeError};
         let e = Escaped::new_unchecked(br#"\?"#.as_ref());
         let mut buf = [0; 128];
-        assert_eq!(
-            Some(Err(UnescapeError::UnknownEscape)),
-            e.fragments().next()
-        );
-        assert_eq!(Err(UnescapeError::UnknownEscape), e.unescape(&mut buf));
+        let err = Located {
+            source: None,
+            line: 1,
+            column: 1,
+            offset: 1,
+            value: UnescapeError::UnknownEscape,
+        };
+        assert_eq!(Some(Err(err)), e.fragments().next());
+        assert_eq!(Err(err), e.unescape(&mut buf));
     }
 
     #[test]
     fn str_buffer_full() {
-        use super::{Escaped, UnescapeError};
+        use super::{Escaped, Located, UnescapeError};
         let mut buf = [0; 0];
+        let err = Located {
+            source: None,
+            line: 1,
+            column: 0,
+            offset: 0,
+            value: UnescapeError::BufferFull,
+        };
         let e = Escaped::new_unchecked(r#"hello\n"#);
-        assert_eq!(Err(UnescapeError::BufferFull), e.unescape(&mut buf));
+        assert_eq!(Err(err), e.unescape(&mut buf));
         let e = Escaped::new_unchecked(r#"\n"#);
-        assert_eq!(Err(UnescapeError::BufferFull), e.unescape(&mut buf));
+        assert_eq!(Err(err), e.unescape(&mut buf));
     }
 
     #[test]
     fn bytes_buffer_full() {
-        use super::{Escaped, UnescapeError};
+        use super::{Escaped, Located, UnescapeError};
         let mut buf = [0; 0];
+        let err = Located {
+            source: None,
+            line: 1,
+            column: 0,
+            offset: 0,
+            value: UnescapeError::BufferFull,
+        };
         let e = Escaped::new_unchecked(br#"hello\n"#.as_ref());
-        assert_eq!(Err(UnescapeError::BufferFull), e.unescape(&mut buf));
+        assert_eq!(Err(err), e.unescape(&mut buf));
         let e = Escaped::new_unchecked(br#"\n"#.as_ref());
-        assert_eq!(Err(UnescapeError::BufferFull), e.unescape(&mut buf));
+        assert_eq!(Err(err), e.unescape(&mut buf));
     }
 
     #[test]

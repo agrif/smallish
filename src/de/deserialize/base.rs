@@ -408,7 +408,7 @@ where
             visitor.visit_borrowed_str(*v)
         } else {
             let unescape = core::mem::take(&mut self.unescape);
-            let (unescape, v) = v.unescape(unescape)?;
+            let (unescape, v) = v.unescape(unescape).map_err(|e| *e)?;
             self.unescape = unescape;
             visitor.visit_borrowed_str(v)
         }
@@ -433,7 +433,7 @@ where
             visitor.visit_borrowed_bytes(*v)
         } else {
             let unescape = core::mem::take(&mut self.unescape);
-            let (unescape, v) = v.unescape(unescape)?;
+            let (unescape, v) = v.unescape(unescape).map_err(|e| *e)?;
             self.unescape = unescape;
             visitor.visit_borrowed_bytes(v)
         }

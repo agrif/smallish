@@ -33,7 +33,7 @@ pub enum TokenError {
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub(crate) struct NomError<I> {
-    input: I,
+    pub(crate) input: I,
     pub(crate) error: TokenError,
 }
 
