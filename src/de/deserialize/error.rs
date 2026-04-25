@@ -69,7 +69,7 @@ pub enum Error {
 impl From<UnescapeError> for Error {
     fn from(other: UnescapeError) -> Self {
         match other {
-            UnescapeError::BadLiteral(e) => Error::Parse(e.into()),
+            UnescapeError::UnknownEscape => Error::Parse(ParseError::UnknownEscape),
             UnescapeError::BufferFull => Error::BufferFull,
         }
     }

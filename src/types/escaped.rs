@@ -2,15 +2,16 @@ use core::ops::Deref;
 
 use nom::{combinator, multi, Parser};
 
-use crate::de::{token::IResult, TokenError, Tokenizer};
+use crate::de::token::{IResult, NomError};
+use crate::de::{TokenError, Tokenizer};
 
-/// Errors encountered by [Escaped::unescape].
+/// Errors encountered by [Escaped].
 #[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum UnescapeError {
-    /// The string or bytes is malformed (usually a bad escape).
-    #[error("bad unescaped literal")]
-    BadLiteral(#[from] TokenError),
+    /// The string or bytes is has an unknown escape sequence.
+    #[error("unknown escape sequence")]
+    UnknownEscape,
     /// The buffer used to unescape the string or bytes is full.
     #[error("unescape buffer full")]
     BufferFull,
@@ -73,11 +74,11 @@ impl<T> Escaped<T> {
 impl<T> Escaped<T> {
     /// Create a new escaped string or bytes from an underlying value.
     ///
-    /// This is checked for validity: if the value is malformed
-    /// (usually from a bad escape sequence), this will fail.
+    /// This is checked for validity: if the value has a bad escape
+    /// sequence, this will fail.
     ///
     /// To avoid this check, see [new_unchecked](Self::new_unchecked).
-    pub fn new<I>(s: T) -> Result<Self, TokenError>
+    pub fn new<I>(s: T) -> Result<Self, UnescapeError>
     where
         T: Escapeable<I>,
     {
@@ -86,16 +87,30 @@ impl<T> Escaped<T> {
         Ok(escaped)
     }
 
-    fn check<I>(&self) -> Result<(), TokenError>
+    fn from_nom_error(error: nom::Err<NomError<&[u8]>>) -> UnescapeError {
+        // this can only produce UnknownEscape, but check when we can
+        match error {
+            nom::Err::Incomplete(_) => UnescapeError::UnknownEscape,
+            nom::Err::Error(e) | nom::Err::Failure(e) => {
+                assert_eq!(
+                    e.error,
+                    TokenError::UnknownEscape,
+                    "string/bytes tokenizer error other than UnknownEscape"
+                );
+                UnescapeError::UnknownEscape
+            }
+        }
+    }
+
+    fn check<I>(&self) -> Result<(), UnescapeError>
     where
         T: Escapeable<I>,
     {
         let input = T::as_bytes(&self.0);
         match combinator::recognize(multi::many0_count(T::chunk)).parse(input) {
             Ok((b"", _)) => Ok(()),
-            Ok(_) => Err(TokenError::UnknownToken),
-            Err(nom::Err::Incomplete(_)) => Err(TokenError::UnknownToken),
-            Err(nom::Err::Error(e) | nom::Err::Failure(e)) => Err(e.error),
+            Ok(_) => Err(UnescapeError::UnknownEscape),
+            Err(e) => Err(Self::from_nom_error(e)),
         }
     }
 
@@ -129,10 +144,10 @@ impl<T> Escaped<T> {
     /// items (`char` or `u8`) from the wrapped value.
     ///
     /// If you have used [new_unchecked](Self::new_unchecked), it may
-    /// also yield an error, usually due to an unknown escape.
+    /// also yield an error due to an unknown escape.
     pub fn fragments<'a, I>(
         &'a self,
-    ) -> impl Iterator<Item = Result<EscapedFragment<&'a T::Target, I>, TokenError>>
+    ) -> impl Iterator<Item = Result<EscapedFragment<&'a T::Target, I>, UnescapeError>>
     where
         T: Escapeable<I>,
     {
@@ -234,14 +249,17 @@ where
     T: Escapeable<I>,
     T::Target: 'a,
 {
-    type Item = Result<EscapedFragment<&'a T::Target, I>, TokenError>;
+    type Item = Result<EscapedFragment<&'a T::Target, I>, UnescapeError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.input.is_empty() {
             return None;
         }
 
-        match T::chunk.parse(self.input) {
+        match T::chunk
+            .parse(self.input)
+            .map_err(Escaped::<T>::from_nom_error)
+        {
             Ok((rest, chunk)) => {
                 assert!(
                     rest.len() < self.input.len(),
@@ -251,8 +269,7 @@ where
                 Some(Ok(chunk))
             }
             // can only be caused by a bad use of new_unchecked
-            Err(nom::Err::Incomplete(_)) => Some(Err(TokenError::UnknownToken)),
-            Err(nom::Err::Error(e) | nom::Err::Failure(e)) => Some(Err(e.error)),
+            Err(e) => Some(Err(e)),
         }
     }
 }
@@ -345,41 +362,44 @@ where
 mod test {
     #[test]
     fn str_bad_escape() {
-        use super::{Escaped, TokenError};
-        assert_eq!(Escaped::new(r#"hello\?"#), Err(TokenError::UnknownEscape));
+        use super::{Escaped, UnescapeError};
+        assert_eq!(
+            Escaped::new(r#"hello\?"#),
+            Err(UnescapeError::UnknownEscape)
+        );
     }
 
     #[test]
     fn bytes_bad_escape() {
-        use super::{Escaped, TokenError};
+        use super::{Escaped, UnescapeError};
         assert_eq!(
             Escaped::new(br#"hello\?"#.as_ref()),
-            Err(TokenError::UnknownEscape)
+            Err(UnescapeError::UnknownEscape)
         );
     }
 
     #[test]
     fn str_bad_escape_unchecked() {
-        use super::{Escaped, TokenError, UnescapeError};
+        use super::{Escaped, UnescapeError};
         let e = Escaped::new_unchecked(r#"\?"#);
         let mut buf = [0; 128];
-        assert_eq!(Some(Err(TokenError::UnknownEscape)), e.fragments().next());
         assert_eq!(
-            Err(UnescapeError::BadLiteral(TokenError::UnknownEscape)),
-            e.unescape(&mut buf)
+            Some(Err(UnescapeError::UnknownEscape)),
+            e.fragments().next()
         );
+        assert_eq!(Err(UnescapeError::UnknownEscape), e.unescape(&mut buf));
     }
 
     #[test]
     fn bytes_bad_escape_unchecked() {
-        use super::{Escaped, TokenError, UnescapeError};
+        use super::{Escaped, UnescapeError};
         let e = Escaped::new_unchecked(br#"\?"#.as_ref());
         let mut buf = [0; 128];
-        assert_eq!(Some(Err(TokenError::UnknownEscape)), e.fragments().next());
         assert_eq!(
-            Err(UnescapeError::BadLiteral(TokenError::UnknownEscape)),
-            e.unescape(&mut buf)
+            Some(Err(UnescapeError::UnknownEscape)),
+            e.fragments().next()
         );
+        assert_eq!(Err(UnescapeError::UnknownEscape), e.unescape(&mut buf));
     }
 
     #[test]
