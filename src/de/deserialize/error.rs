@@ -1,6 +1,6 @@
 use serde::de;
 
-use crate::de::ParseError;
+use crate::de::{ParseError, TokenError};
 use crate::fmt::FormatIter;
 use crate::syntax::{Float, Integer};
 use crate::types::UnescapeError;
@@ -10,7 +10,7 @@ use crate::types::UnescapeError;
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Error {
     /// The parser found an error.
-    #[error("parse error: {0}")]
+    #[error("{0}")]
     Parse(#[from] ParseError),
     /// There was unconsumed data at the end of the input.
     #[error("unused input at end")]
@@ -69,7 +69,9 @@ pub enum Error {
 impl From<UnescapeError> for Error {
     fn from(other: UnescapeError) -> Self {
         match other {
-            UnescapeError::UnknownEscape => Error::Parse(ParseError::UnknownEscape),
+            UnescapeError::UnknownEscape => {
+                Error::Parse(ParseError::Token(TokenError::UnknownEscape))
+            }
             UnescapeError::BufferFull => Error::UnescapeBufferFull,
         }
     }

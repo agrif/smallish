@@ -8,18 +8,9 @@ use crate::Flavor;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum ParseError {
-    /// End of file (there is no more input to consume).
-    #[error("end of file")]
-    Eof,
-    /// The tokenizer found something it didn't recognize.
-    #[error("unknown token")]
-    UnknownToken,
-    /// There is invalid utf-8 inside a string literal.
-    #[error("invalid utf-8")]
-    InvalidUtf8,
-    /// There is an invalid escape sequence inside a string or bytes literal.
-    #[error("unknown escape sequence")]
-    UnknownEscape,
+    /// The tokenizer found an error.
+    #[error("{0}")]
+    Token(#[from] TokenError),
     /// The parser found a token it did not expect in this context.
     #[error("unexpected {0}, expected one of {choices}", choices=FormatIter::new(.1.iter(), ", "))]
     UnexpectedToken(TokenKind, &'static [TokenKind]),
@@ -32,17 +23,6 @@ pub enum ParseError {
     /// There is an incomplete `key=value` pair.
     #[error("incomplete field")]
     IncompleteField,
-}
-
-impl From<TokenError> for ParseError {
-    fn from(err: TokenError) -> Self {
-        match err {
-            TokenError::Eof => Self::Eof,
-            TokenError::UnknownToken => Self::UnknownToken,
-            TokenError::InvalidUtf8 => Self::InvalidUtf8,
-            TokenError::UnknownEscape => Self::UnknownEscape,
-        }
-    }
 }
 
 /// Opaque struct to store state for [Parser].
@@ -143,11 +123,11 @@ where
     /// Returns `true` if and only if there is no input left.
     ///
     /// This is `true` if and only if the next event will be
-    /// `ParseError::Eof`.
+    /// `ParseError::Token(TokenError::Eof)`.
     pub fn is_eof(&mut self) -> bool {
         let decide = |ev: &LocResult<Event, ParseError>| match ev {
             Ok(_) => false,
-            Err(e) => matches!(**e, ParseError::Eof),
+            Err(e) => matches!(**e, ParseError::Token(TokenError::Eof)),
         };
 
         if let Some(ev) = self.unused_event.as_ref() {
@@ -480,7 +460,7 @@ where
             let tok = match tok {
                 Ok(tok) => tok,
                 Err(e) => match e.into() {
-                    ParseError::Eof => {
+                    ParseError::Token(TokenError::Eof) => {
                         let val = match self.only_stack_state() {
                             Some(State::Enum | State::BareEnum) => {
                                 let _ = self.pop();
@@ -499,7 +479,7 @@ where
                                     self.initial_state = State::Value;
                                     Ok(Event::MapClose)
                                 }
-                                _ => Err(ParseError::Eof),
+                                _ => Err(ParseError::Token(TokenError::Eof)),
                             },
                         };
                         return loc.replace(val).to_result();
@@ -526,7 +506,7 @@ where
     fn next(&mut self) -> Option<Self::Item> {
         match self.next_event() {
             Ok(ev) => Some(Ok(ev)),
-            Err(e) if matches!(*e, ParseError::Eof) => None,
+            Err(e) if matches!(*e, ParseError::Token(TokenError::Eof)) => None,
             Err(e) => Some(Err(e)),
         }
     }
@@ -583,7 +563,7 @@ mod test {
             $(#[$attr])*
             fn $name() {
                 #[allow(unused)]
-                use super::{Event, Event::*, Parser, ParseError, Flavor, ParserState};
+                use super::{Event, Event::*, Parser, ParseError, TokenError, Flavor, ParserState};
                 #[allow(unused)]
                 use crate::syntax::Value::*;
                 let events: &[Event] = &[$($ev,)*];
@@ -595,7 +575,7 @@ mod test {
                 }
 
                 assert!(parser.is_eof());
-                assert_eq!(ParseError::Eof, *parser.next_event().unwrap_err());
+                assert_eq!(ParseError::Token(TokenError::Eof), *parser.next_event().unwrap_err());
             }
         }
     }
@@ -607,7 +587,7 @@ mod test {
             $(#[$attr])*
             fn $name() {
                 #[allow(unused)]
-                use super::{Event, Event::*, Parser, ParseError, Flavor, ParserState};
+                use super::{Event, Event::*, Parser, ParseError, TokenError, Flavor, ParserState};
                 #[allow(unused)]
                 use crate::syntax::Value::*;
                 let mut state = [ParserState::zero(); 64];
@@ -616,7 +596,7 @@ mod test {
                     parser.next_event().unwrap();
                 }
                 assert!(parser.is_eof());
-                assert_eq!(ParseError::Eof, *parser.next_event().unwrap_err());
+                assert_eq!(ParseError::Token(TokenError::Eof), *parser.next_event().unwrap_err());
             }
         }
     }
