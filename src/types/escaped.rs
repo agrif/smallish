@@ -36,7 +36,7 @@ pub enum EscapedFragment<Slice, Item> {
 /// [unescape](Escaped::unescape) to handle those escapes and convert
 /// them into a plain string.
 ///
-/// Most of the methods require that `T: Escapeable`, which
+/// Most of the methods require that `T: Escapable`, which
 /// essentially means you can [Deref] `T` as either `&str` or
 /// `&[u8]`. This covers almost all string-like and bytes-like types.
 ///
@@ -86,7 +86,7 @@ impl<T> Escaped<T> {
     /// To avoid this check, see [new_unchecked](Self::new_unchecked).
     pub fn new<I>(s: T) -> Result<Self, Located<'static, UnescapeError>>
     where
-        T: Escapeable<I>,
+        T: Escapable<I>,
     {
         let escaped = Self(s);
         escaped.check().map_err(|loc| loc.without_source())?;
@@ -98,7 +98,7 @@ impl<T> Escaped<T> {
         error: nom::Err<NomError<&'a [u8]>>,
     ) -> Located<'a, UnescapeError>
     where
-        T: Escapeable<I>,
+        T: Escapable<I>,
     {
         let src = T::as_bytes(&self.0);
 
@@ -122,7 +122,7 @@ impl<T> Escaped<T> {
 
     fn check<'a, I>(&'a self) -> Result<(), Located<'a, UnescapeError>>
     where
-        T: Escapeable<I>,
+        T: Escapable<I>,
     {
         let input = T::as_bytes(&self.0);
         match combinator::recognize(multi::many0_count(T::chunk)).parse(input) {
@@ -142,7 +142,7 @@ impl<T> Escaped<T> {
     /// tell you exactly which error.
     pub fn has_escapes<I>(&self) -> bool
     where
-        T: Escapeable<I>,
+        T: Escapable<I>,
     {
         let bytes = T::as_bytes(&self.0);
 
@@ -169,7 +169,7 @@ impl<T> Escaped<T> {
         &'a self,
     ) -> impl Iterator<Item = Result<EscapedFragment<&'a T::Target, I>, Located<'a, UnescapeError>>>
     where
-        T: Escapeable<I>,
+        T: Escapable<I>,
     {
         FragmentIterator::<'a, T, I> {
             input: T::as_bytes(&self.0),
@@ -197,7 +197,7 @@ impl<T> Escaped<T> {
         buffer: &'buf mut [u8],
     ) -> Result<(&'buf mut [u8], &'buf T::Target), Located<'a, UnescapeError>>
     where
-        T: Escapeable<I>,
+        T: Escapable<I>,
         I: Copy,
     {
         let mut i = 0;
@@ -268,14 +268,14 @@ struct FragmentIterator<'a, T, I> {
 
 impl<'a, T, I> core::iter::FusedIterator for FragmentIterator<'a, T, I>
 where
-    T: Escapeable<I>,
+    T: Escapable<I>,
     T::Target: 'a,
 {
 }
 
 impl<'a, T, I> Iterator for FragmentIterator<'a, T, I>
 where
-    T: Escapeable<I>,
+    T: Escapable<I>,
     T::Target: 'a,
 {
     type Item = Result<EscapedFragment<&'a T::Target, I>, Located<'a, UnescapeError>>;
@@ -317,9 +317,9 @@ impl<T> Deref for Escaped<T> {
 /// crate. However, it comes with implementations for any type that
 /// implements the [Deref] trait and yields `&str` or `&[u8]`.
 #[allow(private_bounds)]
-pub trait Escapeable<Item>: SealedEscapeable<Item> + Deref {}
+pub trait Escapable<Item>: SealedEscapable<Item> + Deref {}
 
-trait SealedEscapeable<Item>: Deref {
+trait SealedEscapable<Item>: Deref {
     fn chunk(input: &[u8]) -> IResult<&[u8], EscapedFragment<&Self::Target, Item>>;
 
     fn as_bytes(slice: &Self::Target) -> &[u8];
@@ -331,9 +331,9 @@ trait SealedEscapeable<Item>: Deref {
     fn finalize(slice: &[u8]) -> &Self::Target;
 }
 
-impl<T> Escapeable<char> for T where T: Deref<Target = str> {}
+impl<T> Escapable<char> for T where T: Deref<Target = str> {}
 
-impl<T> SealedEscapeable<char> for T
+impl<T> SealedEscapable<char> for T
 where
     T: Deref<Target = str>,
 {
@@ -360,9 +360,9 @@ where
     }
 }
 
-impl<T> Escapeable<u8> for T where T: Deref<Target = [u8]> {}
+impl<T> Escapable<u8> for T where T: Deref<Target = [u8]> {}
 
-impl<T> SealedEscapeable<u8> for T
+impl<T> SealedEscapable<u8> for T
 where
     T: Deref<Target = [u8]>,
 {
