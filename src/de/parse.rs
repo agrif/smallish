@@ -89,7 +89,7 @@ where
     /// [ParseError::MaxRecursion]. On average, it needs two elements
     /// per nested value.
     ///
-    /// It is safe to re-use this buffer without zeroing it before use.
+    /// It is safe to reuse this buffer without zeroing it before use.
     pub fn new(flavor: Flavor, input: &'de [u8], state: S) -> Self {
         let initial_state = match flavor {
             Flavor::Value => State::Value,
@@ -601,7 +601,7 @@ mod test {
         }
     }
 
-    // token error propogation
+    // token error propagation
     parse_all_test!(
         #[should_panic(expected = "UnknownToken")]
         unknown_token,

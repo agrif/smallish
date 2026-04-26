@@ -25,7 +25,7 @@
 //!
 //! You can have *smallish* attach a source location to any value in
 //! your type by wrapping it in [Located]. This can be helpful to
-//! point humans to where an error ocurred, for example.
+//! point humans to where an error occurred, for example.
 //!
 //! Errors produced by *smallish* itself are always wrapped in
 //! [Located]. Some effort has gone into making them useful to humans

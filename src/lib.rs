@@ -47,7 +47,7 @@ pub enum Flavor {
 }
 
 // The default state size used in the convenience functions.
-// This is a macro so the docs can re-use it and stay in sync.
+// This is a macro so the docs can reuse it and stay in sync.
 // This might be overkill.
 macro_rules! default_state_size {
     () => {

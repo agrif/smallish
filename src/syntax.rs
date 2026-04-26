@@ -69,7 +69,7 @@
 //! * **Booleans** are written as `true` and `false`.
 //!
 //! * **Integers** are written as strings of digits in decimal, or
-//!   prefixed by `0x` for hexidecimal, `0o` for octal, and `0b` for
+//!   prefixed by `0x` for hexadecimal, `0o` for octal, and `0b` for
 //!   binary. They may start with `+` or `-`.
 //!
 //!   `-42`
@@ -120,7 +120,7 @@
 //!
 //! ## Nested Enumerations and Precedence
 //!
-//! You can use parethesis `()` to enclose values. This is sometimes
+//! You can use parenthesis `()` to enclose values. This is sometimes
 //! necessary to parse a value correctly. For example, enumerations
 //! passed as arguments to another enumeration sometimes need
 //! parenthesis to group the arguments correctly.
@@ -161,9 +161,9 @@
 //!
 //! ### Newtype Structs and Variants
 //!
-//! Newtypes are written exactly the same as the value they
-//! contain. In particular, for newtype enumeration variants, this
-//! means that variants containing a sequence look like tuple
+//! Newtypes are written exactly the same as if the in-between type
+//! was not there. In particular, for newtype enumeration variants,
+//! this means that variants containing a sequence look like tuple
 //! variants, and those containing a struct look like struct
 //! variants. Newtype variants containing any other data are treated
 //! like tuple variants with one argument.
@@ -233,7 +233,7 @@
 //! However, due to ambiguity in the grammar, **alternately-tagged
 //! enums, or enums with untagged variants, need special care**. If
 //! such enums directly contain other enums, the contained enums will
-//! be parsed slightly differently. In particular,
+//! be parsed slightly differently. Specifically,
 //!
 //! * `Variant` is always parsed as a unit variant.
 //!
